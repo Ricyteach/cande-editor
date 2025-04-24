@@ -11,6 +11,9 @@ STEP_START_POS = 57      # Step field starts at position 58 (1-based) -> 57 (0-b
 STEP_END_POS = 62        # Step field ends at position 62 (1-based) -> 62 (0-based)
 STEP_FIELD_WIDTH = STEP_END_POS - STEP_START_POS
 
+# Width for line elements (1D elements)
+LINE_ELEMENT_WIDTH = 3  # Default width for line elements
+
 # CANDE colors for element rendering
 CANDE_COLORS = [
     "#FF0000",  # 1 Red

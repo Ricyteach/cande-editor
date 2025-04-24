@@ -9,6 +9,7 @@ import logging
 from models.cande_model import CandeModel
 from views.main_window import MainWindow
 from views.canvas_view import CanvasView, DisplayMode
+from utils.constants import LINE_ELEMENT_WIDTH
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -52,6 +53,9 @@ class CandeController:
         self.locked_cursor_x = 0
         self.locked_cursor_y = 0
 
+        # Current display filter (None = show all)
+        self.element_type_filter = None
+
         # Set up event handlers
         self._setup_callbacks()
         self._setup_bindings()
@@ -65,7 +69,8 @@ class CandeController:
             "select_by_step": self.select_by_step,
             "assign_to_selection": self.assign_to_selection,
             "display_change": self.on_display_change,
-            "element_type_change": self.on_element_type_change
+            "element_type_change": self.on_element_type_change,
+            "line_width_change": self.on_line_width_change  # Add callback for line width changes
         }
         self.main_window.set_callbacks(callbacks)
 
@@ -114,6 +119,11 @@ class CandeController:
                 self.model.model_max_x,
                 self.model.model_max_y
             )
+
+            # Reset element type filter and update radio button to "All"
+            self.element_type_filter = None
+            self.main_window.element_type_var.set("All")
+
             self.render_mesh()
 
             # Update status
@@ -144,12 +154,17 @@ class CandeController:
 
     def render_mesh(self) -> None:
         """Render the mesh on the canvas."""
+        # Get the current line width value from the UI
+        current_line_width = self.main_window.line_width_var.get()
+
         self.canvas_view.render_mesh(
             self.model.nodes,
             self.model.elements,
             self.model.selected_elements,
             self.model.max_material,
-            self.model.max_step
+            self.model.max_step,
+            self.element_type_filter,  # Pass the current element type filter
+            current_line_width  # Pass the current line width
         )
 
     def on_display_change(self, event: Any) -> None:
@@ -170,20 +185,54 @@ class CandeController:
         """Handle element type selection change."""
         element_type = self.main_window.element_type_var.get()
 
-        # If "All" is selected, do nothing; otherwise, select by type
-        if element_type != "All":
-            count = self.model.select_elements_by_type(element_type)
-            self.render_mesh()
-            self.main_window.update_status(f"Selected {count} {element_type} elements")
+        # Update the element type filter based on selection
+        if element_type == "All":
+            self.element_type_filter = None
+            self.main_window.update_status("Showing all element types")
+        elif element_type == "1D":
+            self.element_type_filter = "1D"
+            self.main_window.update_status("Showing only 1D elements")
+        elif element_type == "2D":
+            self.element_type_filter = "2D"
+            self.main_window.update_status("Showing only 2D elements")
+
+        # Re-render with the new filter
+        self.render_mesh()
+
+    def on_line_width_change(self) -> None:
+        """Handle line width changes for 1D elements."""
+        width = self.main_window.line_width_var.get()
+        logger.info(f"1D element width changed to {width}")
+
+        # Update the rendering with the new width
+        self.render_mesh()
+
+        # Update status bar
+        self.main_window.update_status(f"1D element width set to {width}")
 
     def select_by_material(self) -> None:
         """Select all elements with the specified material number."""
         try:
             material = int(self.main_window.material_var.get())
-            count = self.model.select_elements_by_material(material)
+
+            # Select elements that match both the material and current element type filter
+            count = self.model.select_elements_by_material(
+                material,
+                element_type_filter=self.element_type_filter
+            )
 
             self.render_mesh()
-            self.main_window.update_status(f"Selected {count} elements with material {material}")
+
+            # Update status message based on filter
+            if self.element_type_filter:
+                self.main_window.update_status(
+                    f"Selected {count} {self.element_type_filter} elements with material {material}"
+                )
+            else:
+                self.main_window.update_status(
+                    f"Selected {count} elements with material {material}"
+                )
+
         except ValueError:
             self.main_window.show_message("Error", "Please enter a valid material number", "error")
 
@@ -191,10 +240,25 @@ class CandeController:
         """Select all elements with the specified step number."""
         try:
             step = int(self.main_window.step_var.get())
-            count = self.model.select_elements_by_step(step)
+
+            # Select elements that match both the step and current element type filter
+            count = self.model.select_elements_by_step(
+                step,
+                element_type_filter=self.element_type_filter
+            )
 
             self.render_mesh()
-            self.main_window.update_status(f"Selected {count} elements with step {step}")
+
+            # Update status message based on filter
+            if self.element_type_filter:
+                self.main_window.update_status(
+                    f"Selected {count} {self.element_type_filter} elements with step {step}"
+                )
+            else:
+                self.main_window.update_status(
+                    f"Selected {count} elements with step {step}"
+                )
+
         except ValueError:
             self.main_window.show_message("Error", "Please enter a valid step number", "error")
 
@@ -224,7 +288,12 @@ class CandeController:
                 )
                 return
 
-            self.model.update_elements(material, step)
+            # Only update elements that match the current element type filter
+            updated_count = self.model.update_elements(
+                material,
+                step,
+                element_type_filter=self.element_type_filter
+            )
             self.render_mesh()
 
             # Update status message
@@ -234,9 +303,15 @@ class CandeController:
             if step is not None:
                 msg_parts.append(f"step={step}")
 
-            self.main_window.update_status(
-                f"Assigned {', '.join(msg_parts)} to {len(self.model.selected_elements)} elements"
-            )
+            # Include element type in status message if filtered
+            if self.element_type_filter:
+                self.main_window.update_status(
+                    f"Assigned {', '.join(msg_parts)} to {updated_count} {self.element_type_filter} elements"
+                )
+            else:
+                self.main_window.update_status(
+                    f"Assigned {', '.join(msg_parts)} to {updated_count} elements"
+                )
 
         except ValueError:
             self.main_window.show_message("Error", "Please enter valid numbers", "error")
@@ -324,8 +399,10 @@ class CandeController:
         if (abs(event.x - self.drag_start_x) < 5 and
                 abs(event.y - self.drag_start_y) < 5):
             # Find the element under the cursor
+            current_line_width = self.main_window.line_width_var.get()
             element_id = self.canvas_view.find_element_at_position(
-                event.x, event.y, self.model.nodes, self.model.elements
+                event.x, event.y, self.model.nodes, self.model.elements, self.element_type_filter,
+                current_line_width
             )
             if element_id is not None:
                 elements_selected = True
@@ -399,8 +476,16 @@ class CandeController:
         selected_elements = set()
 
         for element_id, element in self.model.elements.items():
+            # Skip elements that don't match the current filter
+            if not self.model.element_matches_filter(element, self.element_type_filter):
+                continue
+
             element_nodes = [self.model.nodes[node_id] for node_id in element.nodes
                              if node_id in self.model.nodes]
+
+            # Skip if we don't have valid nodes
+            if not element_nodes:
+                continue
 
             # Check selection criteria based on lasso direction
             is_inside = False
@@ -496,6 +581,7 @@ class CandeController:
         self.drag_start_x = event.x
         self.drag_start_y = event.y
 
+        # Redraw with the new pan offset
         self.render_mesh()
 
     def on_escape(self, event: Any) -> None:

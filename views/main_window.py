@@ -5,6 +5,8 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from typing import Dict, Callable, Any, Optional
 
+from utils.constants import LINE_ELEMENT_WIDTH
+
 
 class MainWindow:
     """Main application window for the CANDE Editor."""
@@ -29,6 +31,7 @@ class MainWindow:
         self.status_var = tk.StringVar(value="Ready")
         self.coords_var = tk.StringVar(value="X: 0.00  Y: 0.00")
         self.element_type_var = tk.StringVar(value="All")
+        self.line_width_var = tk.IntVar(value=LINE_ELEMENT_WIDTH)  # Default from constants
 
         # Dictionary to store callback functions
         self.callbacks: Dict[str, Callable] = {}
@@ -100,17 +103,41 @@ class MainWindow:
 
         ttk.Radiobutton(
             element_type_frame,
+            text="1D Elements",
+            variable=self.element_type_var,
+            value="1D"
+        ).pack(anchor=tk.W)
+
+        ttk.Radiobutton(
+            element_type_frame,
             text="2D Elements",
             variable=self.element_type_var,
             value="2D"
         ).pack(anchor=tk.W)
 
-        ttk.Radiobutton(
-            element_type_frame,
-            text="3D Elements",
-            variable=self.element_type_var,
-            value="3D"
-        ).pack(anchor=tk.W)
+        # Add 1D element width control
+        line_width_frame = ttk.LabelFrame(toolbar, text="1D Element Width")
+        line_width_frame.pack(side=tk.LEFT, padx=5)
+
+        line_width_scale = ttk.Scale(
+            line_width_frame,
+            from_=1,
+            to=10,
+            orient=tk.HORIZONTAL,
+            variable=self.line_width_var,
+            length=100,
+            command=lambda val: self.line_width_var.set(round(float(val)))  # Force integer values
+        )
+
+        # Add a spinbox for precise control
+        line_width_spinbox = ttk.Spinbox(
+            line_width_frame,
+            from_=1,
+            to=10,
+            textvariable=self.line_width_var,
+            width=2
+        )
+        line_width_spinbox.pack(side=tk.LEFT, padx=5)
 
         # Canvas for rendering
         canvas_frame = ttk.Frame(main_frame)
@@ -157,6 +184,9 @@ class MainWindow:
 
         if "element_type_change" in callbacks:
             self.element_type_var.trace("w", lambda *args: callbacks["element_type_change"]())
+
+        if "line_width_change" in callbacks:
+            self.line_width_var.trace("w", lambda *args: callbacks["line_width_change"]())
 
     def update_status(self, message: str) -> None:
         """
