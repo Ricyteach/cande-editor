@@ -47,8 +47,8 @@ class CanvasView:
         self.locked_cursor_y = 0
 
     def render_mesh(self, nodes: Dict[int, Node], elements: Dict[int, BaseElement],
-                   selected_elements: Set[int], max_material: int = 1, max_step: int = 1,
-                   element_type_filter: Optional[str] = None) -> None:
+                    selected_elements: Set[int], max_material: int = 1, max_step: int = 1,
+                    element_type_filter: Optional[str] = None, line_width: int = LINE_ELEMENT_WIDTH) -> None:
         """
         Render the mesh on the canvas.
 
@@ -102,14 +102,15 @@ class CanvasView:
             if isinstance(element, Element1D) and len(screen_coords) == 2:
                 # For 1D elements (beams), draw a thick line
                 # Determine the line width based on zoom level to maintain relative size
-                line_width = LINE_ELEMENT_WIDTH * outline_width
+                # Use the parameter passed from the controller instead of the global constant
+                element_line_width = line_width * outline_width
 
                 # Create the line
                 self.canvas.create_line(
                     screen_coords[0][0], screen_coords[0][1],
                     screen_coords[1][0], screen_coords[1][1],
                     fill=fill_color,
-                    width=line_width,
+                    width=element_line_width,
                     tags=(f"element_{element_id}",)
                 )
 
@@ -288,7 +289,7 @@ class CanvasView:
         return inside
 
     def point_near_line(self, x: float, y: float, line_start: Tuple[float, float],
-                        line_end: Tuple[float, float], threshold: float = 5.0) -> bool:
+                        line_end: Tuple[float, float], threshold: float = None) -> bool:
         """
         Check if a point is near a line segment.
 
@@ -302,6 +303,10 @@ class CanvasView:
         Returns:
             True if the point is near the line, False otherwise
         """
+        # Use the passed threshold or default to LINE_ELEMENT_WIDTH * 2
+        if threshold is None:
+            threshold = LINE_ELEMENT_WIDTH * 2
+
         # Extract line start and end points
         x1, y1 = line_start
         x2, y2 = line_end
@@ -335,9 +340,10 @@ class CanvasView:
         return distance <= threshold
 
     def find_element_at_position(self, screen_x: float, screen_y: float,
-                                nodes: Dict[int, Node],
-                                elements: Dict[int, BaseElement],
-                                element_type_filter: Optional[str] = None) -> Optional[int]:
+                                 nodes: Dict[int, Node],
+                                 elements: Dict[int, BaseElement],
+                                 element_type_filter: Optional[str] = None,
+                                 line_width: int = LINE_ELEMENT_WIDTH) -> Optional[int]:
         """
         Find the element at the given screen position.
 
@@ -347,6 +353,7 @@ class CanvasView:
             nodes: Dictionary of nodes
             elements: Dictionary of elements
             element_type_filter: Optional filter for element type ("1D", "2D", or None)
+            line_width: Screen beam element width
 
         Returns:
             Element ID if found, None otherwise
@@ -375,7 +382,7 @@ class CanvasView:
                     screen_x, screen_y,
                     (node1_screen_x, node1_screen_y),
                     (node2_screen_x, node2_screen_y),
-                    threshold=LINE_ELEMENT_WIDTH * 2  # Double the line width as threshold
+                    threshold=line_width * 2  # Double the line width as threshold
                 ):
                     return element_id
 

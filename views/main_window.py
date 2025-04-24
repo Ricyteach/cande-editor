@@ -125,9 +125,9 @@ class MainWindow:
             to=10,
             orient=tk.HORIZONTAL,
             variable=self.line_width_var,
-            length=100
+            length=100,
+            command=lambda val: self.line_width_var.set(round(float(val)))  # Force integer values
         )
-        line_width_scale.pack(side=tk.LEFT, padx=5)
 
         # Add a spinbox for precise control
         line_width_spinbox = ttk.Spinbox(

@@ -154,9 +154,8 @@ class CandeController:
 
     def render_mesh(self) -> None:
         """Render the mesh on the canvas."""
-        # Update LINE_ELEMENT_WIDTH from the UI value
-        global LINE_ELEMENT_WIDTH
-        LINE_ELEMENT_WIDTH = self.main_window.line_width_var.get()
+        # Get the current line width value from the UI
+        current_line_width = self.main_window.line_width_var.get()
 
         self.canvas_view.render_mesh(
             self.model.nodes,
@@ -164,7 +163,8 @@ class CandeController:
             self.model.selected_elements,
             self.model.max_material,
             self.model.max_step,
-            self.element_type_filter  # Pass the current element type filter
+            self.element_type_filter,  # Pass the current element type filter
+            current_line_width  # Pass the current line width
         )
 
     def on_display_change(self, event: Any) -> None:
@@ -399,8 +399,10 @@ class CandeController:
         if (abs(event.x - self.drag_start_x) < 5 and
                 abs(event.y - self.drag_start_y) < 5):
             # Find the element under the cursor
+            current_line_width = self.main_window.line_width_var.get()
             element_id = self.canvas_view.find_element_at_position(
-                event.x, event.y, self.model.nodes, self.model.elements, self.element_type_filter
+                event.x, event.y, self.model.nodes, self.model.elements, self.element_type_filter,
+                current_line_width
             )
             if element_id is not None:
                 elements_selected = True
