@@ -3,7 +3,7 @@ Main window view for CANDE Input File Editor.
 """
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from typing import Dict, Callable, Any, Optional
+from typing import Dict, Callable, Any, Optional, List
 
 from utils.constants import LINE_ELEMENT_WIDTH
 
@@ -30,7 +30,13 @@ class MainWindow:
         self.assign_step_var = tk.StringVar()
         self.status_var = tk.StringVar(value="Ready")
         self.coords_var = tk.StringVar(value="X: 0.00  Y: 0.00")
-        self.element_type_var = tk.StringVar(value="All")
+
+        # Replace single radio button variable with checkbox variables
+        self.show_all_var = tk.BooleanVar(value=True)
+        self.show_1d_var = tk.BooleanVar(value=True)
+        self.show_2d_var = tk.BooleanVar(value=True)
+        self.show_interface_var = tk.BooleanVar(value=True)
+
         self.line_width_var = tk.IntVar(value=LINE_ELEMENT_WIDTH)  # Default from constants
 
         # Dictionary to store callback functions
@@ -90,30 +96,43 @@ class MainWindow:
         self.assign_btn = ttk.Button(toolbar, text="Assign to Selection")
         self.assign_btn.pack(side=tk.LEFT, padx=5)
 
-        # Element type selection
-        element_type_frame = ttk.LabelFrame(toolbar, text="Element Type")
+        # CHANGE: Element type CHECKBOXES instead of radio buttons
+        element_type_frame = ttk.LabelFrame(toolbar, text="Element Types")
         element_type_frame.pack(side=tk.LEFT, padx=5)
 
-        ttk.Radiobutton(
+        self.all_checkbox = ttk.Checkbutton(
             element_type_frame,
             text="All",
-            variable=self.element_type_var,
-            value="All"
-        ).pack(anchor=tk.W)
+            variable=self.show_all_var,
+            command=self._handle_all_checkbox
+        )
+        self.all_checkbox.pack(anchor=tk.W)
 
-        ttk.Radiobutton(
+        ttk.Separator(element_type_frame, orient='horizontal').pack(fill='x', pady=2)
+
+        self.el1d_checkbox = ttk.Checkbutton(
             element_type_frame,
             text="1D Elements",
-            variable=self.element_type_var,
-            value="1D"
-        ).pack(anchor=tk.W)
+            variable=self.show_1d_var,
+            command=self._handle_individual_checkbox
+        )
+        self.el1d_checkbox.pack(anchor=tk.W)
 
-        ttk.Radiobutton(
+        self.el2d_checkbox = ttk.Checkbutton(
             element_type_frame,
             text="2D Elements",
-            variable=self.element_type_var,
-            value="2D"
-        ).pack(anchor=tk.W)
+            variable=self.show_2d_var,
+            command=self._handle_individual_checkbox
+        )
+        self.el2d_checkbox.pack(anchor=tk.W)
+
+        self.interface_checkbox = ttk.Checkbutton(
+            element_type_frame,
+            text="Interface Elements",
+            variable=self.show_interface_var,
+            command=self._handle_individual_checkbox
+        )
+        self.interface_checkbox.pack(anchor=tk.W)
 
         # Add 1D element width control
         line_width_frame = ttk.LabelFrame(toolbar, text="1D Element Width")
@@ -128,6 +147,7 @@ class MainWindow:
             length=100,
             command=lambda val: self.line_width_var.set(round(float(val)))  # Force integer values
         )
+        line_width_scale.pack(side=tk.TOP, padx=5)
 
         # Add a spinbox for precise control
         line_width_spinbox = ttk.Spinbox(
@@ -138,6 +158,10 @@ class MainWindow:
             width=2
         )
         line_width_spinbox.pack(side=tk.LEFT, padx=5)
+
+        # Create interfaces button
+        self.create_interfaces_btn = ttk.Button(toolbar, text="Create Interfaces")
+        self.create_interfaces_btn.pack(side=tk.LEFT, padx=5)
 
         # Canvas for rendering
         canvas_frame = ttk.Frame(main_frame)
@@ -153,6 +177,41 @@ class MainWindow:
         # Coordinates display
         coords_label = ttk.Label(main_frame, textvariable=self.coords_var, relief=tk.SUNKEN, anchor=tk.E)
         coords_label.pack(fill=tk.X, side=tk.BOTTOM, padx=5, pady=2)
+
+    def _handle_all_checkbox(self) -> None:
+        """Handle the state change of the 'All' checkbox."""
+        # When "All" is checked/unchecked, set all other checkboxes to match
+        all_checked = self.show_all_var.get()
+        self.show_1d_var.set(all_checked)
+        self.show_2d_var.set(all_checked)
+        self.show_interface_var.set(all_checked)
+
+        # Trigger the element type change callback if it exists
+        if "element_type_change" in self.callbacks:
+            self.callbacks["element_type_change"]()
+
+    def _handle_individual_checkbox(self) -> None:
+        """Handle state changes of individual element type checkboxes."""
+        # Update "All" checkbox based on individual selections
+        if self.show_1d_var.get() and self.show_2d_var.get() and self.show_interface_var.get():
+            self.show_all_var.set(True)
+        else:
+            self.show_all_var.set(False)
+
+        # Trigger the element type change callback if it exists
+        if "element_type_change" in self.callbacks:
+            self.callbacks["element_type_change"]()
+
+    def get_selected_element_types(self) -> List[str]:
+        """Get a list of currently selected element types."""
+        selected_types = []
+        if self.show_1d_var.get():
+            selected_types.append("1D")
+        if self.show_2d_var.get():
+            selected_types.append("2D")
+        if self.show_interface_var.get():
+            selected_types.append("Interface")
+        return selected_types
 
     def set_callbacks(self, callbacks: Dict[str, Callable]) -> None:
         """
@@ -182,11 +241,11 @@ class MainWindow:
         if "assign_to_selection" in callbacks:
             self.assign_btn.config(command=callbacks["assign_to_selection"])
 
-        if "element_type_change" in callbacks:
-            self.element_type_var.trace("w", lambda *args: callbacks["element_type_change"]())
-
         if "line_width_change" in callbacks:
             self.line_width_var.trace("w", lambda *args: callbacks["line_width_change"]())
+
+        if "create_interfaces" in callbacks:
+            self.create_interfaces_btn.config(command=callbacks["create_interfaces"])
 
     def update_status(self, message: str) -> None:
         """

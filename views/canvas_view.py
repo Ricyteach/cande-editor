@@ -8,7 +8,7 @@ import logging
 import math
 
 from models.node import Node
-from models.element import BaseElement, Element, Element1D, Element2D
+from models.element import BaseElement, Element, Element1D, Element2D, InterfaceElement
 from utils.constants import CANDE_COLORS, LINE_ELEMENT_WIDTH
 
 # Configure logging
@@ -46,9 +46,8 @@ class CanvasView:
         self.locked_cursor_x = 0
         self.locked_cursor_y = 0
 
-    def render_mesh(self, nodes: Dict[int, Node], elements: Dict[int, BaseElement],
-                    selected_elements: Set[int], max_material: int = 1, max_step: int = 1,
-                    element_type_filter: Optional[str] = None, line_width: int = LINE_ELEMENT_WIDTH) -> None:
+    def render_mesh(self, nodes, elements, selected_elements, max_material=1, max_step=1,
+                    element_type_filter=None, line_width=3) -> None:
         """
         Render the mesh on the canvas.
 
@@ -58,7 +57,8 @@ class CanvasView:
             selected_elements: Set of selected element IDs
             max_material: Maximum material number for color mapping
             max_step: Maximum step number for color mapping
-            element_type_filter: Optional filter for element type ("1D", "2D", or None)
+            element_type_filter: List of element types to display, None means display all
+            line_width: Width for 1D elements
         """
         if not nodes or not elements:
             return
@@ -69,9 +69,7 @@ class CanvasView:
         # Draw elements
         for element_id, element in elements.items():
             # Check if the element should be displayed based on filter
-            if element_type_filter == "1D" and not isinstance(element, Element1D):
-                continue
-            elif element_type_filter == "2D" and not isinstance(element, Element2D):
+            if not self._should_display_element(element, element_type_filter):
                 continue
 
             # Get screen coordinates for each node
@@ -98,11 +96,9 @@ class CanvasView:
             outline_width = 2 if element_id in selected_elements else 1
             outline_color = "red" if element_id in selected_elements else "black"
 
-            # Different rendering for 1D vs 2D elements
+            # Different rendering for 1D vs 2D vs Interface elements
             if isinstance(element, Element1D) and len(screen_coords) == 2:
                 # For 1D elements (beams), draw a thick line
-                # Determine the line width based on zoom level to maintain relative size
-                # Use the parameter passed from the controller instead of the global constant
                 element_line_width = line_width * outline_width
 
                 # Create the line
@@ -119,6 +115,40 @@ class CanvasView:
                     # Draw selection indicators at each end point
                     self._draw_selection_indicator(screen_coords[0][0], screen_coords[0][1])
                     self._draw_selection_indicator(screen_coords[1][0], screen_coords[1][1])
+            elif isinstance(element, InterfaceElement) and len(element.nodes) >= 2:
+                # For interface elements, draw a diamond shape
+                # Get coordinates for interface element nodes (only need first two nodes for placement)
+                screen_coords = []
+                for node_id in element.nodes[:2]:  # Just use I and J nodes for rendering
+                    if node_id in nodes:
+                        node = nodes[node_id]
+                        screen_x, screen_y = self.model_to_screen(node.x, node.y)
+                        screen_coords.append((screen_x, screen_y))
+
+                # Skip if we don't have enough coordinates
+                if len(screen_coords) < 2:
+                    continue
+
+                # Calculate average position (they should be the same, but just in case)
+                avg_x = sum(x for x, _ in screen_coords) / len(screen_coords)
+                avg_y = sum(y for _, y in screen_coords) / len(screen_coords)
+
+                # Draw interface marker (diamond shape)
+                size = 8  # Size of marker
+                self.canvas.create_polygon(
+                    avg_x, avg_y - size,
+                           avg_x + size, avg_y,
+                    avg_x, avg_y + size,
+                           avg_x - size, avg_y,
+                    fill=fill_color,
+                    outline=outline_color,
+                    width=outline_width,
+                    tags=(f"element_{element_id}",)
+                )
+
+                # Draw a selection indicator if the element is selected
+                if element_id in selected_elements:
+                    self._draw_selection_indicator(avg_x, avg_y)
             else:
                 # For 2D elements, create a polygon
                 polygon_coords = [coord for point in screen_coords for coord in point]
@@ -386,6 +416,20 @@ class CanvasView:
                 ):
                     return element_id
 
+            # Handle interface elements (3 nodes)
+            elif isinstance(element, InterfaceElement):
+                # For interface elements, check distance to the marker position
+                avg_x = sum(node.x for node in element_nodes[:2]) / 2
+                avg_y = sum(node.y for node in element_nodes[:2]) / 2
+
+                # Convert to screen coordinates
+                avg_screen_x, avg_screen_y = self.model_to_screen(avg_x, avg_y)
+
+                # Check if point is near the marker (use a simple distance check)
+                distance = math.sqrt((screen_x - avg_screen_x) ** 2 + (screen_y - avg_screen_y) ** 2)
+                if distance <= 10:  # Adjust threshold as needed
+                    return element_id
+
             # Handle 2D elements (3+ nodes)
             elif len(element_nodes) >= 3:
                 # Create a polygon from the nodes
@@ -396,3 +440,32 @@ class CanvasView:
                     return element_id
 
         return None
+
+    def _should_display_element(self, element, element_type_filter):
+        """
+        Check if an element should be displayed based on the filter.
+
+        Args:
+            element: The element to check
+            element_type_filter: List of element types to display, None means display all
+
+        Returns:
+            True if the element should be displayed, False otherwise
+        """
+        # If no filter or None, show all elements
+        if element_type_filter is None:
+            return True
+
+        # If empty filter list, show nothing
+        if element_type_filter == []:
+            return False
+
+        # Check element type against the filter list
+        if "1D" in element_type_filter and isinstance(element, Element1D):
+            return True
+        if "2D" in element_type_filter and isinstance(element, Element2D):
+            return True
+        if "Interface" in element_type_filter and isinstance(element, InterfaceElement):
+            return True
+
+        return False

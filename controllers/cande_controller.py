@@ -70,7 +70,8 @@ class CandeController:
             "assign_to_selection": self.assign_to_selection,
             "display_change": self.on_display_change,
             "element_type_change": self.on_element_type_change,
-            "line_width_change": self.on_line_width_change  # Add callback for line width changes
+            "line_width_change": self.on_line_width_change,
+            "create_interfaces": self.create_interfaces,
         }
         self.main_window.set_callbacks(callbacks)
 
@@ -120,9 +121,14 @@ class CandeController:
                 self.model.model_max_y
             )
 
-            # Reset element type filter and update radio button to "All"
+            # Reset element type filter and update checkboxes to show all
             self.element_type_filter = None
-            self.main_window.element_type_var.set("All")
+
+            # Set all checkboxes to checked state
+            self.main_window.show_all_var.set(True)
+            self.main_window.show_1d_var.set(True)
+            self.main_window.show_2d_var.set(True)
+            self.main_window.show_interface_var.set(True)
 
             self.render_mesh()
 
@@ -153,7 +159,7 @@ class CandeController:
             self.main_window.show_message("Error", f"Failed to save file: {save_path}", "error")
 
     def render_mesh(self) -> None:
-        """Render the mesh on the canvas."""
+        """Render the mesh on the canvas with the selected filter types."""
         # Get the current line width value from the UI
         current_line_width = self.main_window.line_width_var.get()
 
@@ -163,8 +169,8 @@ class CandeController:
             self.model.selected_elements,
             self.model.max_material,
             self.model.max_step,
-            self.element_type_filter,  # Pass the current element type filter
-            current_line_width  # Pass the current line width
+            self.element_type_filter,  # Pass the list of element types to filter
+            current_line_width
         )
 
     def on_display_change(self, event: Any) -> None:
@@ -182,19 +188,25 @@ class CandeController:
         self.render_mesh()
 
     def on_element_type_change(self) -> None:
-        """Handle element type selection change."""
-        element_type = self.main_window.element_type_var.get()
+        """Handle element type selection change from checkboxes."""
+        # Get selected element types from the UI
+        selected_types = self.main_window.get_selected_element_types()
 
         # Update the element type filter based on selection
-        if element_type == "All":
-            self.element_type_filter = None
-            self.main_window.update_status("Showing all element types")
-        elif element_type == "1D":
-            self.element_type_filter = "1D"
-            self.main_window.update_status("Showing only 1D elements")
-        elif element_type == "2D":
-            self.element_type_filter = "2D"
-            self.main_window.update_status("Showing only 2D elements")
+        if not selected_types:
+            # If no types are selected, show nothing
+            self.element_type_filter = []
+            self.main_window.update_status("No element types selected for display")
+        else:
+            # Store the list of selected types
+            self.element_type_filter = selected_types
+
+            # Update status message
+            if len(selected_types) == 3:
+                self.main_window.update_status("Showing all element types")
+            else:
+                type_list = ", ".join(selected_types)
+                self.main_window.update_status(f"Showing only {type_list} elements")
 
         # Re-render with the new filter
         self.render_mesh()
@@ -459,6 +471,32 @@ class CandeController:
         # Update status
         self.main_window.update_status(f"Selected {len(self.model.selected_elements)} elements")
 
+    def element_matches_filter(self, model, element) -> bool:
+        """
+        Check if an element matches the current type filter list.
+
+        Args:
+            model: The CandeModel instance
+            element: The element to check
+
+        Returns:
+            True if the element matches any filter in the list or if the list is empty
+        """
+        # If filter is empty list, show nothing
+        if self.element_type_filter == []:
+            return False
+
+        # If filter is None (legacy "All" selection), show everything
+        if self.element_type_filter is None:
+            return True
+
+        # Check if element type is in the filter list
+        for filter_type in self.element_type_filter:
+            if model.element_matches_filter(element, filter_type):
+                return True
+
+        return False
+
     def _find_elements_in_lasso(self, min_x: float, min_y: float,
                                 max_x: float, max_y: float) -> Set[int]:
         """
@@ -477,7 +515,8 @@ class CandeController:
 
         for element_id, element in self.model.elements.items():
             # Skip elements that don't match the current filter
-            if not self.model.element_matches_filter(element, self.element_type_filter):
+            # FIXED: Use self.element_matches_filter instead of model.element_matches_filter
+            if not self.element_matches_filter(self.model, element):
                 continue
 
             element_nodes = [self.model.nodes[node_id] for node_id in element.nodes
@@ -594,3 +633,26 @@ class CandeController:
         self.model.selected_elements.clear()
         self.render_mesh()
         self.main_window.update_status("Selection cleared")
+
+    def create_interfaces(self) -> None:
+        """Create interface elements between beam elements and 2D elements."""
+        if not self.model.nodes or not self.model.elements:
+            self.main_window.show_message("Info", "No model loaded", "info")
+            return
+
+        count = self.model.create_interfaces()
+
+        if count > 0:
+            self.render_mesh()
+            self.main_window.update_status(f"Created {count} interface elements")
+            self.main_window.show_message(
+                "Success",
+                f"Created {count} interface elements with default material=1 and step=1",
+                "info"
+            )
+        else:
+            self.main_window.show_message(
+                "Info",
+                "No eligible nodes found for interface creation",
+                "info"
+            )
