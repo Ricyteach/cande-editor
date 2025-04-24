@@ -125,7 +125,9 @@ class CandeModel:
                 elif node_count in ELEMENT_TYPE_DICT:
                     element_type = ELEMENT_TYPE_DICT[node_count]
                 else:
-                    element_type = None
+                    logger.warning(
+                        f"Unknown element type: ID={element_id}, node_count={node_count}, class={element_class}")
+                    continue  # Skip this element
 
                 self.elements[element_id] = element_type(
                     element_id=element_id,
@@ -463,6 +465,11 @@ class CandeModel:
             if count >= 2 and node_id in element2d_nodes
         }
 
+        # Log what we found for debugging
+        logger.info(f"Found {len(beam_nodes)} nodes used by beam elements")
+        logger.info(f"Found {len(element2d_nodes)} nodes used by 2D elements")
+        logger.info(f"Found {len(shared_nodes)} nodes shared between beam elements and 2D elements")
+
         return shared_nodes
 
     def _update_beam_elements_for_interface(self, old_node_id: int, new_node_id: int) -> None:
@@ -519,4 +526,5 @@ class CandeModel:
 
         # Format for C-4.L3!! element line
         # Adjust format based on your CANDE file format
-        return f"                   C-4.L3!! {element.element_id:4d}{node_ids[0]:5d}{node_ids[1]:5d}{node_ids[2]:5d}{node_ids[3]:5d}{element.material:5d}{element.step:5d}{element_type:5d}\n"
+        return (f"                   C-4.L3!! {element.element_id:4d}{node_ids[0]:5d}{node_ids[1]:5d}{node_ids[2]:5d}"
+                f"{node_ids[3]:5d}{element.material:5d}{element.step:5d}{element_type:5d}\n")

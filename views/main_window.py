@@ -199,6 +199,9 @@ class MainWindow:
         if "line_width_change" in callbacks:
             self.line_width_var.trace("w", lambda *args: callbacks["line_width_change"]())
 
+        if "create_interfaces" in callbacks:
+            self.create_interfaces_btn.config(command=callbacks["create_interfaces"])
+
     def update_status(self, message: str) -> None:
         """
         Update the status bar message.
