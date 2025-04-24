@@ -520,6 +520,8 @@ class CandeModel:
         beam_nodes = {}
         # Track nodes used by 2D elements
         element2d_nodes = set()
+        # Track nodes used by interface elements
+        interface_nodes = set()
 
         # Collect nodes by element type
         for element_id, element in self.elements.items():
@@ -530,16 +532,21 @@ class CandeModel:
             elif isinstance(element, Element2D):
                 # For 2D elements, just track which nodes are used
                 element2d_nodes.update(element.nodes)
+            elif isinstance(element, InterfaceElement):
+                # For interface elements, track the nodes they use
+                interface_nodes.update(element.nodes)
 
         # Find nodes that are used by multiple beam elements AND by at least one 2D element
+        # AND are not already used by an interface element
         shared_nodes = {
             node_id for node_id, count in beam_nodes.items()
-            if count >= 2 and node_id in element2d_nodes
+            if count >= 2 and node_id in element2d_nodes and node_id not in interface_nodes
         }
 
         # Log what we found for debugging
         logger.info(f"Found {len(beam_nodes)} nodes used by beam elements")
         logger.info(f"Found {len(element2d_nodes)} nodes used by 2D elements")
+        logger.info(f"Found {len(interface_nodes)} nodes used by interface elements")
         logger.info(f"Found {len(shared_nodes)} nodes shared between beam elements and 2D elements")
 
         return shared_nodes
