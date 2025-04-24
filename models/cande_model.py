@@ -174,35 +174,64 @@ class CandeModel:
             logger.error(f"Error saving file: {str(e)}")
             return False
 
-    def select_elements_by_material(self, material: int) -> int:
+    def element_matches_filter(self, element: BaseElement, element_type_filter: Optional[str]) -> bool:
+        """
+        Check if an element matches the current type filter.
+
+        Args:
+            element: The element to check
+            element_type_filter: The current element type filter ("1D", "2D", or None)
+
+        Returns:
+            True if the element matches the filter or if there is no filter
+        """
+        if element_type_filter is None:
+            return True
+        elif element_type_filter == "1D" and isinstance(element, Element1D):
+            return True
+        elif element_type_filter == "2D" and isinstance(element, Element2D):
+            return True
+        return False
+
+    def select_elements_by_material(self, material: int, element_type_filter: Optional[str] = None) -> int:
         """
         Select elements with the specified material number.
 
         Args:
             material: Material number to select
+            element_type_filter: Optional filter for element type ("1D", "2D", or None)
 
         Returns:
             Number of elements selected
         """
         count = 0
         for element_id, element in self.elements.items():
+            # Skip elements that don't match the filter
+            if not self.element_matches_filter(element, element_type_filter):
+                continue
+
             if element.material == material:
                 self.selected_elements.add(element_id)
                 count += 1
         return count
 
-    def select_elements_by_step(self, step: int) -> int:
+    def select_elements_by_step(self, step: int, element_type_filter: Optional[str] = None) -> int:
         """
         Select elements with the specified step number.
 
         Args:
             step: Step number to select
+            element_type_filter: Optional filter for element type ("1D", "2D", or None)
 
         Returns:
             Number of elements selected
         """
         count = 0
         for element_id, element in self.elements.items():
+            # Skip elements that don't match the filter
+            if not self.element_matches_filter(element, element_type_filter):
+                continue
+
             if element.step == step:
                 self.selected_elements.add(element_id)
                 count += 1
@@ -226,21 +255,32 @@ class CandeModel:
                 count += 1
         return count
 
-    def update_elements(self, material: Optional[int] = None, step: Optional[int] = None) -> None:
+    def update_elements(self, material: Optional[int] = None, step: Optional[int] = None,
+                        element_type_filter: Optional[str] = None) -> int:
         """
         Update the material and/or step of selected elements.
 
         Args:
             material: New material number (optional)
             step: New step number (optional)
+            element_type_filter: Optional filter for element type ("1D", "2D", or None)
+
+        Returns:
+            Number of elements updated
         """
         if not self.file_content:
             logger.warning("No file content to update")
-            return
+            return 0
+
+        updated_count = 0
 
         for element_id in self.selected_elements:
             element = self.elements.get(element_id)
             if not element:
+                continue
+
+            # Skip elements that don't match the filter
+            if not self.element_matches_filter(element, element_type_filter):
                 continue
 
             # Update element in memory
@@ -248,6 +288,8 @@ class CandeModel:
                 element.material = material
             if step is not None:
                 element.step = step
+
+            updated_count += 1
 
             # Get the line to modify
             line = self.file_content[element.line_number]
@@ -286,6 +328,8 @@ class CandeModel:
             # Update the line in the file
             self.file_content[element.line_number] = line
             element.line_content = line
+
+        return updated_count
 
     def clear_selection(self) -> None:
         """Clear the current element selection."""

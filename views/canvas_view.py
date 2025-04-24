@@ -47,7 +47,8 @@ class CanvasView:
         self.locked_cursor_y = 0
 
     def render_mesh(self, nodes: Dict[int, Node], elements: Dict[int, BaseElement],
-                   selected_elements: Set[int], max_material: int = 1, max_step: int = 1) -> None:
+                   selected_elements: Set[int], max_material: int = 1, max_step: int = 1,
+                   element_type_filter: Optional[str] = None) -> None:
         """
         Render the mesh on the canvas.
 
@@ -57,6 +58,7 @@ class CanvasView:
             selected_elements: Set of selected element IDs
             max_material: Maximum material number for color mapping
             max_step: Maximum step number for color mapping
+            element_type_filter: Optional filter for element type ("1D", "2D", or None)
         """
         if not nodes or not elements:
             return
@@ -66,6 +68,12 @@ class CanvasView:
 
         # Draw elements
         for element_id, element in elements.items():
+            # Check if the element should be displayed based on filter
+            if element_type_filter == "1D" and not isinstance(element, Element1D):
+                continue
+            elif element_type_filter == "2D" and not isinstance(element, Element2D):
+                continue
+
             # Get screen coordinates for each node
             screen_coords = []
             for node_id in element.nodes:
@@ -328,7 +336,8 @@ class CanvasView:
 
     def find_element_at_position(self, screen_x: float, screen_y: float,
                                 nodes: Dict[int, Node],
-                                elements: Dict[int, BaseElement]) -> Optional[int]:
+                                elements: Dict[int, BaseElement],
+                                element_type_filter: Optional[str] = None) -> Optional[int]:
         """
         Find the element at the given screen position.
 
@@ -337,6 +346,7 @@ class CanvasView:
             screen_y: Screen Y coordinate
             nodes: Dictionary of nodes
             elements: Dictionary of elements
+            element_type_filter: Optional filter for element type ("1D", "2D", or None)
 
         Returns:
             Element ID if found, None otherwise
@@ -345,6 +355,12 @@ class CanvasView:
 
         # Check each element
         for element_id, element in elements.items():
+            # Apply element type filter
+            if element_type_filter == "1D" and not isinstance(element, Element1D):
+                continue
+            elif element_type_filter == "2D" and not isinstance(element, Element2D):
+                continue
+
             # Get the nodes for this element
             element_nodes = [nodes[node_id] for node_id in element.nodes if node_id in nodes]
 
