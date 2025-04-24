@@ -1,0 +1,225 @@
+"""
+Main window view for CANDE Input File Editor.
+"""
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+from typing import Dict, Callable, Any, Optional
+
+
+class MainWindow:
+    """Main application window for the CANDE Editor."""
+
+    def __init__(self, root: tk.Tk) -> None:
+        """
+        Initialize the main window.
+
+        Args:
+            root: The root Tkinter window
+        """
+        self.root = root
+        self.root.title("CANDE Input File Editor")
+        self.root.geometry("1200x800")
+
+        # Variables for UI controls
+        self.display_var = tk.StringVar(value="Material")
+        self.material_var = tk.StringVar()
+        self.step_var = tk.StringVar()
+        self.assign_material_var = tk.StringVar()
+        self.assign_step_var = tk.StringVar()
+        self.status_var = tk.StringVar(value="Ready")
+        self.coords_var = tk.StringVar(value="X: 0.00  Y: 0.00")
+        self.element_type_var = tk.StringVar(value="All")
+
+        # Dictionary to store callback functions
+        self.callbacks: Dict[str, Callable] = {}
+
+        # Create UI components
+        self._create_ui()
+
+    def _create_ui(self) -> None:
+        """Create the user interface components."""
+        # Create main frame
+        main_frame = ttk.Frame(self.root)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Create toolbar frame
+        toolbar = ttk.Frame(main_frame)
+        toolbar.pack(fill=tk.X, side=tk.TOP, padx=5, pady=5)
+
+        # Open file button
+        self.open_btn = ttk.Button(toolbar, text="Open File")
+        self.open_btn.pack(side=tk.LEFT, padx=5)
+
+        # Save file button
+        self.save_btn = ttk.Button(toolbar, text="Save File")
+        self.save_btn.pack(side=tk.LEFT, padx=5)
+
+        # Display mode selection
+        ttk.Label(toolbar, text="Display:").pack(side=tk.LEFT, padx=5)
+        self.display_combo = ttk.Combobox(
+            toolbar,
+            textvariable=self.display_var,
+            values=["Material", "Step"],
+            width=10,
+            state="readonly"
+        )
+        self.display_combo.pack(side=tk.LEFT, padx=5)
+
+        # Material number input for selection
+        ttk.Label(toolbar, text="Material:").pack(side=tk.LEFT, padx=5)
+        ttk.Entry(toolbar, textvariable=self.material_var, width=5).pack(side=tk.LEFT)
+        self.select_material_btn = ttk.Button(toolbar, text="Select by Material")
+        self.select_material_btn.pack(side=tk.LEFT, padx=5)
+
+        # Step number input for selection
+        ttk.Label(toolbar, text="Step:").pack(side=tk.LEFT, padx=5)
+        ttk.Entry(toolbar, textvariable=self.step_var, width=5).pack(side=tk.LEFT)
+        self.select_step_btn = ttk.Button(toolbar, text="Select by Step")
+        self.select_step_btn.pack(side=tk.LEFT, padx=5)
+
+        # Assign material/step to selection
+        ttk.Label(toolbar, text="Assign Material:").pack(side=tk.LEFT, padx=5)
+        ttk.Entry(toolbar, textvariable=self.assign_material_var, width=5).pack(side=tk.LEFT)
+
+        ttk.Label(toolbar, text="Assign Step:").pack(side=tk.LEFT, padx=5)
+        ttk.Entry(toolbar, textvariable=self.assign_step_var, width=5).pack(side=tk.LEFT)
+
+        self.assign_btn = ttk.Button(toolbar, text="Assign to Selection")
+        self.assign_btn.pack(side=tk.LEFT, padx=5)
+
+        # Element type selection
+        element_type_frame = ttk.LabelFrame(toolbar, text="Element Type")
+        element_type_frame.pack(side=tk.LEFT, padx=5)
+
+        ttk.Radiobutton(
+            element_type_frame,
+            text="All",
+            variable=self.element_type_var,
+            value="All"
+        ).pack(anchor=tk.W)
+
+        ttk.Radiobutton(
+            element_type_frame,
+            text="2D Elements",
+            variable=self.element_type_var,
+            value="2D"
+        ).pack(anchor=tk.W)
+
+        ttk.Radiobutton(
+            element_type_frame,
+            text="3D Elements",
+            variable=self.element_type_var,
+            value="3D"
+        ).pack(anchor=tk.W)
+
+        # Canvas for rendering
+        canvas_frame = ttk.Frame(main_frame)
+        canvas_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        self.canvas = tk.Canvas(canvas_frame, bg="white")
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+
+        # Status bar
+        status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
+        status_bar.pack(fill=tk.X, side=tk.BOTTOM, padx=5, pady=2)
+
+        # Coordinates display
+        coords_label = ttk.Label(main_frame, textvariable=self.coords_var, relief=tk.SUNKEN, anchor=tk.E)
+        coords_label.pack(fill=tk.X, side=tk.BOTTOM, padx=5, pady=2)
+
+    def set_callbacks(self, callbacks: Dict[str, Callable]) -> None:
+        """
+        Set callback functions for UI events.
+
+        Args:
+            callbacks: Dictionary mapping event names to callback functions
+        """
+        self.callbacks = callbacks
+
+        # Connect UI elements to callbacks
+        if "open_file" in callbacks:
+            self.open_btn.config(command=callbacks["open_file"])
+
+        if "save_file" in callbacks:
+            self.save_btn.config(command=callbacks["save_file"])
+
+        if "display_change" in callbacks:
+            self.display_combo.bind("<<ComboboxSelected>>", callbacks["display_change"])
+
+        if "select_by_material" in callbacks:
+            self.select_material_btn.config(command=callbacks["select_by_material"])
+
+        if "select_by_step" in callbacks:
+            self.select_step_btn.config(command=callbacks["select_by_step"])
+
+        if "assign_to_selection" in callbacks:
+            self.assign_btn.config(command=callbacks["assign_to_selection"])
+
+        if "element_type_change" in callbacks:
+            self.element_type_var.trace("w", lambda *args: callbacks["element_type_change"]())
+
+    def update_status(self, message: str) -> None:
+        """
+        Update the status bar message.
+
+        Args:
+            message: The message to display
+        """
+        self.status_var.set(message)
+
+    def update_coordinates(self, x: float, y: float) -> None:
+        """
+        Update the coordinates display.
+
+        Args:
+            x: X coordinate
+            y: Y coordinate
+        """
+        self.coords_var.set(f"X: {x:.2f}  Y: {y:.2f}")
+
+    def show_message(self, title: str, message: str, message_type: str = "info") -> None:
+        """
+        Show a message dialog.
+
+        Args:
+            title: Dialog title
+            message: Message to display
+            message_type: Type of message ("info", "error", or "warning")
+        """
+        if message_type == "error":
+            messagebox.showerror(title, message)
+        elif message_type == "warning":
+            messagebox.showwarning(title, message)
+        else:
+            messagebox.showinfo(title, message)
+
+    def get_open_filename(self) -> Optional[str]:
+        """
+        Show file open dialog.
+
+        Returns:
+            Selected file path or None if cancelled
+        """
+        filepath = filedialog.askopenfilename(
+            title="Open CANDE Input File",
+            filetypes=[("CANDE Input Files", "*.cid"), ("All Files", "*.*")]
+        )
+        return filepath if filepath else None
+
+    def get_save_filename(self, default_path: Optional[str] = None) -> Optional[str]:
+        """
+        Show file save dialog.
+
+        Args:
+            default_path: Default file path
+
+        Returns:
+            Selected file path or None if cancelled
+        """
+        filepath = filedialog.asksaveasfilename(
+            title="Save CANDE Input File",
+            defaultextension=".cid",
+            initialfile=default_path,
+            filetypes=[("CANDE Input Files", "*.cid"), ("All Files", "*.*")]
+        )
+        return filepath if filepath else None
