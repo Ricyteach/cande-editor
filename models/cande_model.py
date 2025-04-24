@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 ELEMENT_TYPE_DICT = {
     2: Element1D,
     3: Element2D,
+    4: Element2D,  # 4-node elements are also 2D elements
 }
 
 
@@ -111,26 +112,22 @@ class CandeModel:
                 node_ids = [n for n in [node1, node2, node3, node4] if n != 0]
                 node_count = len(node_ids)
 
-                # Skip beam elements (2-node elements)
-                if node_count == 2:
-                    continue
+                # Create appropriate element type based on node count
+                # Now include 1D (2-node) elements
+                if node_count in ELEMENT_TYPE_DICT:
+                    element_type = ELEMENT_TYPE_DICT[node_count]
+                    self.elements[element_id] = element_type(
+                        element_id=element_id,
+                        nodes=node_ids,
+                        material=material,
+                        step=step,
+                        line_number=line_num,
+                        line_content=line,
+                    )
 
-                # Create appropriate element type
-                # For now, we'll use the existing Element class
-                # In the future, you could detect 2D vs 3D elements based on file content
-                element_type = ELEMENT_TYPE_DICT[node_count]
-                self.elements[element_id] = element_type(
-                    element_id=element_id,
-                    nodes=node_ids,
-                    material=material,
-                    step=step,
-                    line_number=line_num,
-                    line_content=line,
-                )
-
-                # Update max material and step numbers
-                self.max_material = max(self.max_material, material)
-                self.max_step = max(self.max_step, step)
+                    # Update max material and step numbers
+                    self.max_material = max(self.max_material, material)
+                    self.max_step = max(self.max_step, step)
 
         logger.info(f"Loaded {len(self.nodes)} nodes and {len(self.elements)} elements")
 
@@ -216,7 +213,7 @@ class CandeModel:
         Select elements by their type.
 
         Args:
-            element_type: Type of element to select ("2D" or "3D")
+            element_type: Type of element to select ("1D" or "2D")
 
         Returns:
             Number of elements selected

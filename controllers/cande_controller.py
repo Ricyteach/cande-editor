@@ -9,6 +9,7 @@ import logging
 from models.cande_model import CandeModel
 from views.main_window import MainWindow
 from views.canvas_view import CanvasView, DisplayMode
+from utils.constants import LINE_ELEMENT_WIDTH
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -65,7 +66,8 @@ class CandeController:
             "select_by_step": self.select_by_step,
             "assign_to_selection": self.assign_to_selection,
             "display_change": self.on_display_change,
-            "element_type_change": self.on_element_type_change
+            "element_type_change": self.on_element_type_change,
+            "line_width_change": self.on_line_width_change  # Add callback for line width changes
         }
         self.main_window.set_callbacks(callbacks)
 
@@ -144,6 +146,10 @@ class CandeController:
 
     def render_mesh(self) -> None:
         """Render the mesh on the canvas."""
+        # Update LINE_ELEMENT_WIDTH from the UI value
+        global LINE_ELEMENT_WIDTH
+        LINE_ELEMENT_WIDTH = self.main_window.line_width_var.get()
+
         self.canvas_view.render_mesh(
             self.model.nodes,
             self.model.elements,
@@ -170,11 +176,26 @@ class CandeController:
         """Handle element type selection change."""
         element_type = self.main_window.element_type_var.get()
 
-        # If "All" is selected, do nothing; otherwise, select by type
-        if element_type != "All":
+        # If "All" is selected, clear selection; otherwise, select by type
+        if element_type == "All":
+            self.model.clear_selection()
+            self.render_mesh()
+            self.main_window.update_status("Showing all element types")
+        else:
             count = self.model.select_elements_by_type(element_type)
             self.render_mesh()
             self.main_window.update_status(f"Selected {count} {element_type} elements")
+
+    def on_line_width_change(self) -> None:
+        """Handle line width changes for 1D elements."""
+        width = self.main_window.line_width_var.get()
+        logger.info(f"1D element width changed to {width}")
+
+        # Update the rendering with the new width
+        self.render_mesh()
+
+        # Update status bar
+        self.main_window.update_status(f"1D element width set to {width}")
 
     def select_by_material(self) -> None:
         """Select all elements with the specified material number."""
@@ -402,6 +423,10 @@ class CandeController:
             element_nodes = [self.model.nodes[node_id] for node_id in element.nodes
                              if node_id in self.model.nodes]
 
+            # Skip if we don't have valid nodes
+            if not element_nodes:
+                continue
+
             # Check selection criteria based on lasso direction
             is_inside = False
 
@@ -496,6 +521,7 @@ class CandeController:
         self.drag_start_x = event.x
         self.drag_start_y = event.y
 
+        # Redraw with the new pan offset
         self.render_mesh()
 
     def on_escape(self, event: Any) -> None:
