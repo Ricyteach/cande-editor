@@ -115,6 +115,13 @@ class MainWindow:
             value="2D"
         ).pack(anchor=tk.W)
 
+        ttk.Radiobutton(
+            element_type_frame,
+            text="Interface Elements",
+            variable=self.element_type_var,
+            value="Interface"
+        ).pack(anchor=tk.W)
+
         # Add 1D element width control
         line_width_frame = ttk.LabelFrame(toolbar, text="1D Element Width")
         line_width_frame.pack(side=tk.LEFT, padx=5)
@@ -138,6 +145,10 @@ class MainWindow:
             width=2
         )
         line_width_spinbox.pack(side=tk.LEFT, padx=5)
+
+        # Create interfaces button
+        self.create_interfaces_btn = ttk.Button(toolbar, text="Create Interfaces")
+        self.create_interfaces_btn.pack(side=tk.LEFT, padx=5)
 
         # Canvas for rendering
         canvas_frame = ttk.Frame(main_frame)

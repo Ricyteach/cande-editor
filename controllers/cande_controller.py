@@ -70,7 +70,8 @@ class CandeController:
             "assign_to_selection": self.assign_to_selection,
             "display_change": self.on_display_change,
             "element_type_change": self.on_element_type_change,
-            "line_width_change": self.on_line_width_change  # Add callback for line width changes
+            "line_width_change": self.on_line_width_change,
+            "create_interfaces": self.create_interfaces,
         }
         self.main_window.set_callbacks(callbacks)
 
@@ -195,6 +196,9 @@ class CandeController:
         elif element_type == "2D":
             self.element_type_filter = "2D"
             self.main_window.update_status("Showing only 2D elements")
+        elif element_type == "Interface":
+            self.element_type_filter = "Interface"
+            self.main_window.update_status("Showing only interface elements")
 
         # Re-render with the new filter
         self.render_mesh()
@@ -594,3 +598,26 @@ class CandeController:
         self.model.selected_elements.clear()
         self.render_mesh()
         self.main_window.update_status("Selection cleared")
+
+    def create_interfaces(self) -> None:
+        """Create interface elements between beam elements and 2D elements."""
+        if not self.model.nodes or not self.model.elements:
+            self.main_window.show_message("Info", "No model loaded", "info")
+            return
+
+        count = self.model.create_interfaces()
+
+        if count > 0:
+            self.render_mesh()
+            self.main_window.update_status(f"Created {count} interface elements")
+            self.main_window.show_message(
+                "Success",
+                f"Created {count} interface elements with default material=1 and step=1",
+                "info"
+            )
+        else:
+            self.main_window.show_message(
+                "Info",
+                "No eligible nodes found for interface creation",
+                "info"
+            )

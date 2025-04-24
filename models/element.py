@@ -55,3 +55,13 @@ class Element2D(BaseElement):
     """Represents a 2D element in the CANDE model."""
     # Add any 2D-specific attributes here as needed
     pass
+
+
+@dataclass
+class InterfaceElement(BaseElement):
+    """Represents a 0D interface element in the CANDE model."""
+    # Any interface-specific properties would go here
+    def __post_init__(self):
+        super().__post_init__()
+        if len(self.nodes) != 3:
+            raise ValueError("Interface elements must consist of 3 nodes")

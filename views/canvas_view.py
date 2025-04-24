@@ -8,7 +8,7 @@ import logging
 import math
 
 from models.node import Node
-from models.element import BaseElement, Element, Element1D, Element2D
+from models.element import BaseElement, Element, Element1D, Element2D, InterfaceElement
 from utils.constants import CANDE_COLORS, LINE_ELEMENT_WIDTH
 
 # Configure logging
@@ -98,7 +98,7 @@ class CanvasView:
             outline_width = 2 if element_id in selected_elements else 1
             outline_color = "red" if element_id in selected_elements else "black"
 
-            # Different rendering for 1D vs 2D elements
+            # Different rendering for 1D vs 2D vs Interface elements
             if isinstance(element, Element1D) and len(screen_coords) == 2:
                 # For 1D elements (beams), draw a thick line
                 # Determine the line width based on zoom level to maintain relative size
@@ -119,6 +119,40 @@ class CanvasView:
                     # Draw selection indicators at each end point
                     self._draw_selection_indicator(screen_coords[0][0], screen_coords[0][1])
                     self._draw_selection_indicator(screen_coords[1][0], screen_coords[1][1])
+            elif isinstance(element, InterfaceElement) and len(element.nodes) == 3:
+                # For interface elements, draw a diamond shape
+                # Get coordinates for interface element nodes
+                screen_coords = []
+                for node_id in element.nodes[:2]:  # Just use I and J nodes for rendering
+                    if node_id in nodes:
+                        node = nodes[node_id]
+                        screen_x, screen_y = self.model_to_screen(node.x, node.y)
+                        screen_coords.append((screen_x, screen_y))
+
+                # Skip if we don't have enough coordinates
+                if len(screen_coords) < 2:
+                    continue
+
+                # Calculate average position (they should be the same, but just in case)
+                avg_x = sum(x for x, _ in screen_coords) / len(screen_coords)
+                avg_y = sum(y for _, y in screen_coords) / len(screen_coords)
+
+                # Draw interface marker (diamond shape)
+                size = 8  # Size of marker
+                self.canvas.create_polygon(
+                    avg_x, avg_y - size,
+                           avg_x + size, avg_y,
+                    avg_x, avg_y + size,
+                           avg_x - size, avg_y,
+                    fill=fill_color,
+                    outline=outline_color,
+                    width=outline_width,
+                    tags=(f"element_{element_id}",)
+                )
+
+                # Draw a selection indicator if the element is selected
+                if element_id in selected_elements:
+                    self._draw_selection_indicator(avg_x, avg_y)
             else:
                 # For 2D elements, create a polygon
                 polygon_coords = [coord for point in screen_coords for coord in point]
@@ -384,6 +418,20 @@ class CanvasView:
                     (node2_screen_x, node2_screen_y),
                     threshold=line_width * 2  # Double the line width as threshold
                 ):
+                    return element_id
+
+            # Handle interface elements (3 nodes)
+            elif isinstance(element, InterfaceElement):
+                # For interface elements, check distance to the marker position
+                avg_x = sum(node.x for node in element_nodes[:2]) / 2
+                avg_y = sum(node.y for node in element_nodes[:2]) / 2
+
+                # Convert to screen coordinates
+                avg_screen_x, avg_screen_y = self.model_to_screen(avg_x, avg_y)
+
+                # Check if point is near the marker (use a simple distance check)
+                distance = math.sqrt((screen_x - avg_screen_x) ** 2 + (screen_y - avg_screen_y) ** 2)
+                if distance <= 10:  # Adjust threshold as needed
                     return element_id
 
             # Handle 2D elements (3+ nodes)
