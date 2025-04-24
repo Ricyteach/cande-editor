@@ -471,6 +471,32 @@ class CandeController:
         # Update status
         self.main_window.update_status(f"Selected {len(self.model.selected_elements)} elements")
 
+    def element_matches_filter(self, model, element) -> bool:
+        """
+        Check if an element matches the current type filter list.
+
+        Args:
+            model: The CandeModel instance
+            element: The element to check
+
+        Returns:
+            True if the element matches any filter in the list or if the list is empty
+        """
+        # If filter is empty list, show nothing
+        if self.element_type_filter == []:
+            return False
+
+        # If filter is None (legacy "All" selection), show everything
+        if self.element_type_filter is None:
+            return True
+
+        # Check if element type is in the filter list
+        for filter_type in self.element_type_filter:
+            if model.element_matches_filter(element, filter_type):
+                return True
+
+        return False
+
     def _find_elements_in_lasso(self, min_x: float, min_y: float,
                                 max_x: float, max_y: float) -> Set[int]:
         """
@@ -489,7 +515,8 @@ class CandeController:
 
         for element_id, element in self.model.elements.items():
             # Skip elements that don't match the current filter
-            if not self.model.element_matches_filter(element, self.element_type_filter):
+            # FIXED: Use self.element_matches_filter instead of model.element_matches_filter
+            if not self.element_matches_filter(self.model, element):
                 continue
 
             element_nodes = [self.model.nodes[node_id] for node_id in element.nodes
@@ -629,29 +656,3 @@ class CandeController:
                 "No eligible nodes found for interface creation",
                 "info"
             )
-
-    def element_matches_filter(self, model, element) -> bool:
-        """
-        Check if an element matches the current type filter list.
-
-        Args:
-            model: The CandeModel instance
-            element: The element to check
-
-        Returns:
-            True if the element matches any filter in the list or if the list is empty
-        """
-        # If filter is empty list, show nothing
-        if self.element_type_filter == []:
-            return False
-
-        # If filter is None (legacy "All" selection), show everything
-        if self.element_type_filter is None:
-            return True
-
-        # Check if element type is in the filter list
-        for filter_type in self.element_type_filter:
-            if model.element_matches_filter(element, filter_type):
-                return True
-
-        return False
