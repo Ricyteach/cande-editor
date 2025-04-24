@@ -196,7 +196,50 @@ class CandeModel:
                 new_element_lines.append(element_line)
 
         # Find appropriate insertion points and insert the new lines
-        # (Implementation details...)
+        if new_node_lines or new_element_lines:
+            # Find the last node line to determine where to insert new nodes
+            # Note the last node line is supposed to have "L" directly after "!!"
+            last_node_line = -1
+            node_pattern = re.compile(r'^\s*C-3\.L3!!L')
+
+            # Find the last element line to determine where to insert new elements
+            # Note the last element line is supposed to have "L" directly after "!!"
+            last_element_line = -1
+            element_pattern = re.compile(r'^\s*C-4\.L3!!L')
+
+            for i, line in enumerate(new_file_content):
+                if node_pattern.match(line):
+                    last_node_line = i
+                    continue
+                if element_pattern.match(line):
+                    last_element_line = i
+                    break
+
+            # Insert new nodes after the last node line
+            if new_node_lines and last_node_line >= 0:
+                # remove "!!L" from previous last node line and replace with "!! "
+                new_file_content[last_node_line] = new_file_content[last_node_line].replace('!!L', '!! ')
+                for i, line in enumerate(new_node_lines):
+                    new_file_content.insert(last_node_line + 1 + i, line)
+                else:
+                    # Update the last element line index since we inserted nodes
+                    last_element_line += len(new_node_lines)
+                    # also remove "!! " from last line and replace with "!!L"
+                    new_file_content[last_node_line + len(new_node_lines)] = (
+                        new_file_content[last_node_line + len(new_node_lines)].replace('!! ', '!!L')
+                    )
+
+            # Insert new elements after the last element line
+            if new_element_lines and last_element_line >= 0:
+                # remove "!!L" from previous last element line and replace with "!! "
+                new_file_content[last_element_line] = new_file_content[last_element_line].replace('!!L', '!! ')
+                for i, line in enumerate(new_element_lines):
+                    new_file_content.insert(last_element_line + 1 + i, line)
+
+                # Remove "!! " from last line and replace with "!!L" since we inserted elements
+                new_file_content[last_element_line + len(new_element_lines)] = (
+                    new_file_content[last_element_line + len(new_element_lines)].replace('!! ', '!!L')
+                )
 
         # Save the modified content
         try:
