@@ -46,9 +46,8 @@ class CanvasView:
         self.locked_cursor_x = 0
         self.locked_cursor_y = 0
 
-    def render_mesh(self, nodes: Dict[int, Node], elements: Dict[int, BaseElement],
-                    selected_elements: Set[int], max_material: int = 1, max_step: int = 1,
-                    element_type_filter: Optional[str] = None, line_width: int = LINE_ELEMENT_WIDTH) -> None:
+    def render_mesh(self, nodes, elements, selected_elements, max_material=1, max_step=1,
+                    element_type_filter=None, line_width=3) -> None:
         """
         Render the mesh on the canvas.
 
@@ -58,7 +57,8 @@ class CanvasView:
             selected_elements: Set of selected element IDs
             max_material: Maximum material number for color mapping
             max_step: Maximum step number for color mapping
-            element_type_filter: Optional filter for element type ("1D", "2D", or None)
+            element_type_filter: List of element types to display, None means display all
+            line_width: Width for 1D elements
         """
         if not nodes or not elements:
             return
@@ -69,9 +69,7 @@ class CanvasView:
         # Draw elements
         for element_id, element in elements.items():
             # Check if the element should be displayed based on filter
-            if element_type_filter == "1D" and not isinstance(element, Element1D):
-                continue
-            elif element_type_filter == "2D" and not isinstance(element, Element2D):
+            if not self._should_display_element(element, element_type_filter):
                 continue
 
             # Get screen coordinates for each node
@@ -101,8 +99,6 @@ class CanvasView:
             # Different rendering for 1D vs 2D vs Interface elements
             if isinstance(element, Element1D) and len(screen_coords) == 2:
                 # For 1D elements (beams), draw a thick line
-                # Determine the line width based on zoom level to maintain relative size
-                # Use the parameter passed from the controller instead of the global constant
                 element_line_width = line_width * outline_width
 
                 # Create the line
@@ -119,9 +115,9 @@ class CanvasView:
                     # Draw selection indicators at each end point
                     self._draw_selection_indicator(screen_coords[0][0], screen_coords[0][1])
                     self._draw_selection_indicator(screen_coords[1][0], screen_coords[1][1])
-            elif isinstance(element, InterfaceElement) and len(element.nodes) == 3:
+            elif isinstance(element, InterfaceElement) and len(element.nodes) >= 2:
                 # For interface elements, draw a diamond shape
-                # Get coordinates for interface element nodes
+                # Get coordinates for interface element nodes (only need first two nodes for placement)
                 screen_coords = []
                 for node_id in element.nodes[:2]:  # Just use I and J nodes for rendering
                     if node_id in nodes:
@@ -444,3 +440,32 @@ class CanvasView:
                     return element_id
 
         return None
+
+    def _should_display_element(self, element, element_type_filter):
+        """
+        Check if an element should be displayed based on the filter.
+
+        Args:
+            element: The element to check
+            element_type_filter: List of element types to display, None means display all
+
+        Returns:
+            True if the element should be displayed, False otherwise
+        """
+        # If no filter or None, show all elements
+        if element_type_filter is None:
+            return True
+
+        # If empty filter list, show nothing
+        if element_type_filter == []:
+            return False
+
+        # Check element type against the filter list
+        if "1D" in element_type_filter and isinstance(element, Element1D):
+            return True
+        if "2D" in element_type_filter and isinstance(element, Element2D):
+            return True
+        if "Interface" in element_type_filter and isinstance(element, InterfaceElement):
+            return True
+
+        return False

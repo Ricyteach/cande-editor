@@ -271,21 +271,31 @@ class CandeModel:
             return True
         return False
 
-    def select_elements_by_material(self, material: int, element_type_filter: Optional[str] = None) -> int:
+    def select_elements_by_material(self, material, element_type_filter=None) -> int:
         """
         Select elements with the specified material number.
 
         Args:
             material: Material number to select
-            element_type_filter: Optional filter for element type ("1D", "2D", or None)
+            element_type_filter: Filter for element types, can be None, a string, or a list of strings
 
         Returns:
             Number of elements selected
         """
         count = 0
         for element_id, element in self.elements.items():
-            # Skip elements that don't match the filter
-            if not self.element_matches_filter(element, element_type_filter):
+            # Handle both single filter string and list of filter strings
+            if isinstance(element_type_filter, list):
+                # Check if the element matches any filter in the list
+                matches_filter = False
+                for filter_type in element_type_filter:
+                    if self.element_matches_filter(element, filter_type):
+                        matches_filter = True
+                        break
+
+                if not matches_filter:
+                    continue
+            elif not self.element_matches_filter(element, element_type_filter):
                 continue
 
             if element.material == material:
@@ -293,21 +303,31 @@ class CandeModel:
                 count += 1
         return count
 
-    def select_elements_by_step(self, step: int, element_type_filter: Optional[str] = None) -> int:
+    def select_elements_by_step(self, step, element_type_filter=None) -> int:
         """
         Select elements with the specified step number.
 
         Args:
             step: Step number to select
-            element_type_filter: Optional filter for element type ("1D", "2D", or None)
+            element_type_filter: Filter for element types, can be None, a string, or a list of strings
 
         Returns:
             Number of elements selected
         """
         count = 0
         for element_id, element in self.elements.items():
-            # Skip elements that don't match the filter
-            if not self.element_matches_filter(element, element_type_filter):
+            # Handle both single filter string and list of filter strings
+            if isinstance(element_type_filter, list):
+                # Check if the element matches any filter in the list
+                matches_filter = False
+                for filter_type in element_type_filter:
+                    if self.element_matches_filter(element, filter_type):
+                        matches_filter = True
+                        break
+
+                if not matches_filter:
+                    continue
+            elif not self.element_matches_filter(element, element_type_filter):
                 continue
 
             if element.step == step:
@@ -333,15 +353,14 @@ class CandeModel:
                 count += 1
         return count
 
-    def update_elements(self, material: Optional[int] = None, step: Optional[int] = None,
-                        element_type_filter: Optional[str] = None) -> int:
+    def update_elements(self, material=None, step=None, element_type_filter=None) -> int:
         """
         Update the material and/or step of selected elements.
 
         Args:
             material: New material number (optional)
             step: New step number (optional)
-            element_type_filter: Optional filter for element type ("1D", "2D", or None)
+            element_type_filter: Filter for element types, can be None, a string, or a list of strings
 
         Returns:
             Number of elements updated
@@ -357,8 +376,18 @@ class CandeModel:
             if not element:
                 continue
 
-            # Skip elements that don't match the filter
-            if not self.element_matches_filter(element, element_type_filter):
+            # Handle both single filter string and list of filter strings
+            if isinstance(element_type_filter, list):
+                # Check if the element matches any filter in the list
+                matches_filter = False
+                for filter_type in element_type_filter:
+                    if self.element_matches_filter(element, filter_type):
+                        matches_filter = True
+                        break
+
+                if not matches_filter:
+                    continue
+            elif not self.element_matches_filter(element, element_type_filter):
                 continue
 
             # Update element in memory
