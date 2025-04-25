@@ -439,7 +439,7 @@ class CandeModel:
         # Find beam elements FROM THE SELECTION
         beam_elements = {
             element_id: element for element_id in selected_elements
-            if element_id in self.elements and isinstance(self.elements[element_id], Element1D)
+            if element_id in self.elements and (element := isinstance(self.elements[element_id], Element1D))
         }
 
         # Only proceed if we have beam elements in the selection
