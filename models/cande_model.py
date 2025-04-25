@@ -421,12 +421,12 @@ class CandeModel:
 
         return updated_count
 
-    def create_interfaces(self, selected_elements: Set[int], friction: float = 0.3) -> int:
+    def create_interfaces(self, selected_elements: Set[int] = None, friction: float = 0.3) -> int:
         """
         Automatically creates interface elements between beam elements and 2D elements.
 
         Args:
-            selected_elements: The elements for which to apply the operation
+            selected_elements: The elements for which to apply the operation (or None to use all)
             friction: Friction coefficient for the interface elements
 
         Returns:
@@ -435,14 +435,21 @@ class CandeModel:
         if not self.nodes or not self.elements:
             return 0
 
-        # Calculate angles for all shared nodes in beam structures from selected elements
-        # Find beam elements FROM THE SELECTION
-        beam_elements = {
-            element_id: element for element_id in selected_elements
-            if element_id in self.elements and (element := isinstance(self.elements[element_id], Element1D))
-        }
+        # If no selection provided, use all elements
+        if selected_elements is None or len(selected_elements) == 0:
+            # Get all beam elements instead of just those in the selection
+            beam_elements = {
+                element_id: element for element_id, element in self.elements.items()
+                if isinstance(element, Element1D)
+            }
+        else:
+            # Find beam elements FROM THE SELECTION
+            beam_elements = {
+                element_id: element for element_id in selected_elements
+                if element_id in self.elements and isinstance(element := self.elements[element_id], Element1D)
+            }
 
-        # Only proceed if we have beam elements in the selection
+        # Only proceed if we have beam elements
         if not beam_elements:
             return 0
 
