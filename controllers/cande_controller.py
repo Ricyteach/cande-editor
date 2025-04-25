@@ -641,6 +641,15 @@ class CandeController:
             self.main_window.show_message("Info", "No model loaded", "info")
             return
 
+        # Check if there's a selection and if it contains any beam elements
+        if not self.model.selected_elements:
+            self.main_window.show_message(
+                "Info",
+                "No eligible nodes found for interface creation. Try selecting beam elements first.",
+                "info"
+            )
+            return
+
         # Get friction value from UI (textbox)
         try:
             friction = float(self.main_window.friction_var.get())
@@ -657,11 +666,8 @@ class CandeController:
             self.main_window.update_status("Interface creation cancelled: Invalid friction value")
             return
 
-        # Get the selection to use (or None if empty)
-        selection = self.model.selected_elements if self.model.selected_elements else None
-
         # Create interface elements with the specified friction value
-        count = self.model.create_interfaces(selection, friction)
+        count = self.model.create_interfaces(self.model.selected_elements, friction)
 
         if count > 0:
             self.render_mesh()
