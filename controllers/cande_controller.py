@@ -483,13 +483,13 @@ class CandeController:
         Returns:
             True if the element matches any filter in the list or if the list is empty
         """
-        # If filter is empty list, show nothing
-        if not self.element_type_filter:
-            return False
-
         # If filter is None (legacy "All" selection), show everything
         if self.element_type_filter is None:
             return True
+
+        # If filter is empty list, show nothing
+        if self.element_type_filter == []:
+            return False
 
         # Check if element type is in the filter list
         for filter_type in self.element_type_filter:
