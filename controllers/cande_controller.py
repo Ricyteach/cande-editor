@@ -658,6 +658,7 @@ class CandeController:
             return
 
         # Create interface elements with the specified friction value
+        # Pass the selected_elements to the model
         count = self.model.create_interfaces(self.model.selected_elements, friction)
 
         if count > 0:

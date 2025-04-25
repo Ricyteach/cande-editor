@@ -436,16 +436,20 @@ class CandeModel:
             return 0
 
         # Calculate angles for all shared nodes in beam structures from selected elements
-        # Find beam elements
+        # Find beam elements FROM THE SELECTION
         beam_elements = {
             element_id: element for element_id in selected_elements
-            if isinstance(element:=self.elements[element_id], Element1D)
+            if element_id in self.elements and isinstance(self.elements[element_id], Element1D)
         }
+
+        # Only proceed if we have beam elements in the selection
+        if not beam_elements:
+            return 0
 
         node_angles = self._calculate_interface_angles(beam_elements)
 
-        # Find nodes shared between beam elements (that are also shared by 2D elements)
-        shared_nodes = self._find_shared_beam_nodes()
+        # Find nodes shared between selected beam elements (that are also shared by 2D elements)
+        shared_nodes = self._find_shared_beam_nodes(beam_elements)
 
         # Track new nodes and elements created
         interface_count = 0
@@ -506,19 +510,33 @@ class CandeModel:
             interface_count += 1
 
             # Update beam elements to use the new I node instead of original
-            self._update_beam_elements_for_interface(node_id, i_node_id)
+            # ONLY UPDATE BEAM ELEMENTS IN THE SELECTION
+            self._update_beam_elements_for_interface(node_id, i_node_id, beam_elements.keys())
 
         return interface_count
 
-    def _find_shared_beam_nodes(self) -> Set[int]:
+    def _find_shared_beam_nodes(self, beam_collection=None) -> Set[int]:
         """
         Find nodes that are shared between multiple beam elements and also connected to 2D elements.
+
+        Args:
+            beam_collection: Optional dictionary of beam elements to consider, if None uses all beams
 
         Returns:
             Set of node IDs that are eligible for interface creation
         """
         # Track nodes used by beam elements
         beam_nodes = {}
+
+        # If no specific collection provided, use all beam elements
+        if beam_collection is None:
+            beam_elements = {
+                element_id: element for element_id, element in self.elements.items()
+                if isinstance(element, Element1D)
+            }
+        else:
+            beam_elements = beam_collection
+
         # Track nodes used by 2D elements
         element2d_nodes = set()
         # Track nodes used by interface elements
@@ -526,8 +544,8 @@ class CandeModel:
 
         # Collect nodes by element type
         for element_id, element in self.elements.items():
-            if isinstance(element, Element1D):
-                # For beam elements, count the occurrences of each node
+            if element_id in beam_elements:
+                # For SELECTED beam elements, count the occurrences of each node
                 for node_id in element.nodes:
                     beam_nodes[node_id] = beam_nodes.get(node_id, 0) + 1
             elif isinstance(element, Element2D):
@@ -545,22 +563,28 @@ class CandeModel:
         }
 
         # Log what we found for debugging
-        logger.info(f"Found {len(beam_nodes)} nodes used by beam elements")
+        logger.info(f"Found {len(beam_nodes)} nodes used by selected beam elements")
         logger.info(f"Found {len(element2d_nodes)} nodes used by 2D elements")
         logger.info(f"Found {len(interface_nodes)} nodes used by interface elements")
-        logger.info(f"Found {len(shared_nodes)} nodes shared between beam elements and 2D elements")
+        logger.info(f"Found {len(shared_nodes)} nodes shared between selected beam elements and 2D elements")
 
         return shared_nodes
 
-    def _update_beam_elements_for_interface(self, old_node_id: int, new_node_id: int) -> None:
+    def _update_beam_elements_for_interface(self, old_node_id: int, new_node_id: int,
+                                            element_ids_to_update=None) -> None:
         """
         Update beam elements to use the new inside node instead of the original shared node.
 
         Args:
             old_node_id: Original node ID
             new_node_id: New inside node ID
+            element_ids_to_update: Optional set of element IDs to update, if None updates all Elements
         """
         for element_id, element in self.elements.items():
+            # Skip if not in the selection (if a selection is provided)
+            if element_ids_to_update is not None and element_id not in element_ids_to_update:
+                continue
+
             if isinstance(element, Element1D):
                 # Check if the element uses the old node
                 if old_node_id in element.nodes:
