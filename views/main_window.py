@@ -159,6 +159,19 @@ class MainWindow:
         )
         line_width_spinbox.pack(side=tk.LEFT, padx=5)
 
+        # Add interface friction input
+        interface_frame = ttk.LabelFrame(toolbar, text="Interface Properties")
+        interface_frame.pack(side=tk.LEFT, padx=5)
+
+        ttk.Label(interface_frame, text="Friction:").pack(side=tk.LEFT, padx=2)
+        self.friction_var = tk.StringVar(value="0.3")  # Default friction value as string
+        friction_entry = ttk.Entry(
+            interface_frame,
+            textvariable=self.friction_var,
+            width=5
+        )
+        friction_entry.pack(side=tk.LEFT, padx=2)
+
         # Create interfaces button
         self.create_interfaces_btn = ttk.Button(toolbar, text="Create Interfaces")
         self.create_interfaces_btn.pack(side=tk.LEFT, padx=5)

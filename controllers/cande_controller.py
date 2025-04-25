@@ -91,6 +91,7 @@ class CandeController:
         root.bind("<Escape>", self.on_escape)
         root.bind("<Control-s>", lambda e: self.save_file())
         root.bind("<Control-o>", lambda e: self.open_file())
+        root.bind("<Control-d>", lambda e: self.show_interface_debug_info())
 
         # Mouse wheel for zoom
         canvas.bind("<MouseWheel>", self.on_mouse_wheel)  # Windows
@@ -483,7 +484,7 @@ class CandeController:
             True if the element matches any filter in the list or if the list is empty
         """
         # If filter is empty list, show nothing
-        if self.element_type_filter == []:
+        if not self.element_type_filter:
             return False
 
         # If filter is None (legacy "All" selection), show everything
@@ -640,14 +641,31 @@ class CandeController:
             self.main_window.show_message("Info", "No model loaded", "info")
             return
 
-        count = self.model.create_interfaces()
+        # Get friction value from UI (textbox)
+        try:
+            friction = float(self.main_window.friction_var.get())
+            # Validate range
+            if friction < 0.0 or friction > 1.0:
+                raise ValueError("Friction must be between 0.0 and 1.0")
+        except ValueError as e:
+            # Show error and terminate
+            self.main_window.show_message(
+                "Error",
+                f"Invalid friction value: {str(e)}. Please enter a valid number between 0.0 and 1.0.",
+                "error"
+            )
+            self.main_window.update_status("Interface creation cancelled: Invalid friction value")
+            return
+
+        # Create interface elements with the specified friction value
+        count = self.model.create_interfaces(self.model.selected_elements, friction)
 
         if count > 0:
             self.render_mesh()
-            self.main_window.update_status(f"Created {count} interface elements")
+            self.main_window.update_status(f"Created {count} interface elements with friction {friction:.2f}")
             self.main_window.show_message(
                 "Success",
-                f"Created {count} interface elements with default material=1 and step=1",
+                f"Created {count} interface elements with friction {friction:.2f}",
                 "info"
             )
         else:
@@ -656,3 +674,87 @@ class CandeController:
                 "No eligible nodes found for interface creation",
                 "info"
             )
+
+    def show_interface_debug_info(self) -> None:
+        """
+        Display a debug window showing interface elements and their properties.
+        This is for testing purposes only.
+        """
+        import tkinter as ttk
+        from models.element import InterfaceElement
+        # Find all interface elements in the model
+        interface_elements = {
+            element_id: element for element_id, element in self.model.elements.items()
+            if isinstance(element, InterfaceElement)
+        }
+
+        if not interface_elements:
+            self.main_window.show_message(
+                "Info",
+                "No interface elements found in the model",
+                "info"
+            )
+            return
+
+        # Create debug window
+        debug_window = tk.Toplevel(self.main_window.root)
+        debug_window.title("Interface Elements Debug Info")
+        debug_window.geometry("600x400")
+
+        # Create frame for the table
+        frame = ttk.Frame(debug_window)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        # Create table headers
+        headers = ["Element ID", "Material", "Step", "Nodes (I,J,K)", "Friction", "Angle"]
+        for col, header in enumerate(headers):
+            ttk.Label(frame, text=header, font=("Arial", 10, "bold")).grid(
+                row=0, column=col, padx=5, pady=5, sticky="w"
+            )
+
+        # Add table rows
+        for row, (element_id, element) in enumerate(sorted(interface_elements.items()), start=1):
+            # Element ID
+            ttk.Label(frame, text=str(element_id)).grid(
+                row=row, column=0, padx=5, pady=2, sticky="w"
+            )
+
+            # Material
+            ttk.Label(frame, text=str(element.material)).grid(
+                row=row, column=1, padx=5, pady=2, sticky="w"
+            )
+
+            # Step
+            ttk.Label(frame, text=str(element.step)).grid(
+                row=row, column=2, padx=5, pady=2, sticky="w"
+            )
+
+            # Nodes
+            nodes_str = f"{element.nodes[0]},{element.nodes[1]},{element.nodes[2]}"
+            ttk.Label(frame, text=nodes_str).grid(
+                row=row, column=3, padx=5, pady=2, sticky="w"
+            )
+
+            # Friction
+            ttk.Label(frame, text=f"{element.friction:.3f}").grid(
+                row=row, column=4, padx=5, pady=2, sticky="w"
+            )
+
+            # Angle
+            ttk.Label(frame, text=f"{element.angle:.1f}°").grid(
+                row=row, column=5, padx=5, pady=2, sticky="w"
+            )
+
+        # Add close button
+        ttk.Button(
+            debug_window,
+            text="Close",
+            command=debug_window.destroy
+        ).pack(pady=10)
+
+        # Make the window modal
+        debug_window.transient(self.main_window.root)
+        debug_window.grab_set()
+
+        # Update status bar
+        self.main_window.update_status(f"Found {len(interface_elements)} interface elements")

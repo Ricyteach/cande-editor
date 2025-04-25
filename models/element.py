@@ -61,6 +61,9 @@ class Element2D(BaseElement):
 class InterfaceElement(BaseElement):
     """Represents a 0D interface element in the CANDE model."""
     # Any interface-specific properties would go here
+    friction: float = 0.3  # Default friction coefficient
+    angle: float = 0.0  # Angle from horizontal of normal-force direction (in degrees)
+
     def __post_init__(self):
         super().__post_init__()
         if len(self.nodes) != 3:

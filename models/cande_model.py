@@ -4,6 +4,7 @@ Main model class for CANDE Input File Editor.
 import re
 from typing import Dict, List, Set, Tuple, Optional, cast
 import logging
+import math
 
 from models.node import Node
 from models.element import BaseElement, Element, Element1D, Element2D, InterfaceElement
@@ -335,24 +336,6 @@ class CandeModel:
                 count += 1
         return count
 
-    def select_elements_by_type(self, element_type: str) -> int:
-        """
-        Select elements by their type.
-
-        Args:
-            element_type: Type of element to select ("1D" or "2D")
-
-        Returns:
-            Number of elements selected
-        """
-        count = 0
-        for element_id, element in self.elements.items():
-            if (element_type == "1D" and isinstance(element, Element1D)) or \
-                    (element_type == "2D" and isinstance(element, Element2D)):
-                self.selected_elements.add(element_id)
-                count += 1
-        return count
-
     def update_elements(self, material=None, step=None, element_type_filter=None) -> int:
         """
         Update the material and/or step of selected elements.
@@ -438,15 +421,28 @@ class CandeModel:
 
         return updated_count
 
-    def create_interfaces(self) -> int:
+    def create_interfaces(self, selected_elements: Set[int], friction: float = 0.3) -> int:
         """
         Automatically creates interface elements between beam elements and 2D elements.
+
+        Args:
+            selected_elements: The elements for which to apply the operation
+            friction: Friction coefficient for the interface elements
 
         Returns:
             Number of interface elements created
         """
         if not self.nodes or not self.elements:
             return 0
+
+        # Calculate angles for all shared nodes in beam structures from selected elements
+        # Find beam elements
+        beam_elements = {
+            element_id: element for element_id in selected_elements
+            if isinstance(element:=self.elements[element_id], Element1D)
+        }
+
+        node_angles = self._calculate_interface_angles(beam_elements)
 
         # Find nodes shared between beam elements (that are also shared by 2D elements)
         shared_nodes = self._find_shared_beam_nodes()
@@ -489,6 +485,9 @@ class CandeModel:
                 line_content=""
             )
 
+            # Get the angle for this node (or default to 0 if not calculated)
+            angle = node_angles.get(node_id, 0.0)
+
             # Create interface element
             interface_element_id = max_element_id + 1
             max_element_id += 1
@@ -498,6 +497,8 @@ class CandeModel:
                 nodes=[i_node_id, j_node_id, k_node_id],
                 material=1,  # Default material
                 step=1,  # Default step
+                friction=friction,  # User specified friction
+                angle=angle,  # Calculated angle
                 line_number=-1,
                 line_content=""
             )
@@ -566,6 +567,253 @@ class CandeModel:
                     # Replace the old node with the new one
                     new_nodes = [new_node_id if n == old_node_id else n for n in element.nodes]
                     element.nodes = new_nodes
+
+    def _calculate_interface_angles(self, beam_collection: Optional[Dict[int, Element1D]] = None) -> Dict[int, float]:
+        """
+        Calculate interface angles for shared nodes in beam structures.
+
+        This method traces each continuous beam structure to determine the
+        appropriate angle for interface elements at shared nodes. It starts
+        at the beginning of each structure and follows through to the end.
+
+        Args:
+            beam_collection: Collection of beam elements to process, or None to use all 1D elements
+
+        Returns:
+            Dictionary mapping node IDs to calculated angles (in degrees)
+        """
+        # Use all 1D elements if no collection is provided
+        if beam_collection is None:
+            beam_dict = {
+                element_id: element for element_id, element in self.elements.items()
+                if isinstance(element, Element1D)
+            }
+
+        # Make a copy to avoid modifying the original collection
+        remaining_beams = beam_collection.copy()
+
+        # Dictionary to store node ID -> angle mappings
+        node_angles = {}
+
+        # Process structures until all beams are processed
+        while remaining_beams:
+            # Pick the first beam to start with
+            start_element_id = next(iter(remaining_beams))
+            start_element = remaining_beams[start_element_id]
+
+            # Find the beginning node of this structure
+            start_node_id, structure_beams = self._find_structure_start(start_element, remaining_beams)
+
+            # Calculate angles for all nodes in this structure
+            structure_angles = self._calculate_structure_angles(start_node_id, structure_beams)
+
+            # Add to the overall angles dictionary
+            node_angles.update(structure_angles)
+
+            # Remove processed beams from the remaining collection
+            for beam_id in structure_beams:
+                if beam_id in remaining_beams:
+                    del remaining_beams[beam_id]
+
+        return node_angles
+
+    def _find_structure_start(self, start_element,
+                              beam_collection: Dict[int, Element1D]) -> Tuple[int, Dict[int, Element1D]]:
+        """
+        Find the starting node of a beam structure.
+
+        This method traces a structure to find its beginning node, which is either
+        a node that only appears in one beam (a terminal node) or, if the structure
+        is continuous (forms a loop), an arbitrary node in the structure.
+
+        Args:
+            start_element: The element to start tracing from
+            beam_collection: Collection of available beam elements
+
+        Returns:
+            Tuple of (starting_node_id, structure_beams_dict)
+        """
+        # Dictionary to keep track of which beams are part of this structure
+        structure_beams = {start_element.element_id: start_element}
+
+        # Count node occurrences in all beams in the collection
+        node_occurrences = {}
+        for element_id, element in beam_collection.items():
+            for node_id in element.nodes:
+                node_occurrences[node_id] = node_occurrences.get(node_id, 0) + 1
+
+        # Check if the start element has a terminal node (appears only once)
+        for node_id in start_element.nodes:
+            if node_occurrences.get(node_id, 0) == 1:
+                # Found a terminal node, use it as start
+                return node_id, structure_beams
+
+        # No terminal node found in the start element, trace the structure
+        # to find a terminal node elsewhere or determine it's a loop
+
+        # Start from first node in the element
+        current_node_id = start_element.nodes[0]
+        current_element = start_element
+        visited_nodes = set()
+
+        while True:
+            visited_nodes.add(current_node_id)
+
+            # Find the next node and element in the structure
+            next_node_id, next_element = self._find_next_node_and_element(
+                current_node_id, current_element, beam_collection, structure_beams
+            )
+
+            if next_node_id is None:
+                # Reached a terminal node, this is our start
+                return current_node_id, structure_beams
+
+            if next_node_id in visited_nodes:
+                # We've found a loop, use the original node as start
+                return start_element.nodes[0], structure_beams
+
+            # Continue tracing
+            current_node_id = next_node_id
+            current_element = next_element
+            structure_beams[current_element.element_id] = current_element
+
+    def _find_next_node_and_element(self, current_node_id, current_element,
+                                    beam_collection, structure_beams) -> Tuple[Optional[int], Optional[Element1D]]:
+        """
+        Find the next node and element in a beam structure.
+
+        Args:
+            current_node_id: Current node being processed
+            current_element: Current beam element
+            beam_collection: All available beam elements
+            structure_beams: Elements already identified as part of this structure
+
+        Returns:
+            Tuple of (next_node_id, next_element) or (None, None) if at a terminal node
+        """
+        # Get the other node in the current element
+        other_node_id = None
+        for node_id in current_element.nodes:
+            if node_id != current_node_id:
+                other_node_id = node_id
+                break
+
+        if other_node_id is None:
+            return None, None  # This shouldn't happen with valid beam elements
+
+        # Find elements that use this other node (excluding the current element)
+        connected_elements = []
+        for element_id, element in beam_collection.items():
+            if (element_id != current_element.element_id and
+                    other_node_id in element.nodes and
+                    element_id not in structure_beams):
+                connected_elements.append(element)
+
+        if not connected_elements:
+            # No other elements connect to this node, it's a terminal node
+            return None, None
+
+        # Take the first connected element
+        next_element = connected_elements[0]
+
+        # Get the next node (the one that's not the shared node)
+        next_node_id = None
+        for node_id in next_element.nodes:
+            if node_id != other_node_id:
+                next_node_id = node_id
+                break
+
+        return next_node_id, next_element
+
+    def _calculate_structure_angles(self, start_node_id, structure_beams) -> Dict[int, float]:
+        """
+        Calculate interface angles for all shared nodes in a beam structure.
+
+        This method traces through a structure starting from the beginning node
+        and calculates appropriate angles for each shared node.
+
+        Args:
+            start_node_id: Starting node ID for the structure
+            structure_beams: Dictionary of beam elements in this structure
+
+        Returns:
+            Dictionary mapping node IDs to angles
+        """
+        node_angles = {}
+
+        # Create a graph representation of the structure
+        graph = {}
+        for element in structure_beams.values():
+            n1, n2 = element.nodes
+            if n1 not in graph:
+                graph[n1] = []
+            if n2 not in graph:
+                graph[n2] = []
+            graph[n1].append(n2)
+            graph[n2].append(n1)
+
+        # Find all shared nodes (nodes that appear in multiple beams)
+        shared_nodes = set()
+        for node_id, neighbors in graph.items():
+            if len(neighbors) >= 2:
+                shared_nodes.add(node_id)
+
+        # Calculate angle for each shared node
+        for node_id in shared_nodes:
+            if node_id not in self.nodes:
+                continue
+
+            current_node = self.nodes[node_id]
+            neighbors = graph[node_id]
+
+            # Get coordinates of all neighboring nodes
+            neighbor_coords = []
+            for neighbor_id in neighbors:
+                if neighbor_id in self.nodes:
+                    neighbor_node = self.nodes[neighbor_id]
+                    neighbor_coords.append((neighbor_node.x, neighbor_node.y))
+
+            if not neighbor_coords:
+                continue
+
+            # Calculate tangent direction
+            sum_dx = 0.0
+            sum_dy = 0.0
+
+            for nx, ny in neighbor_coords:
+                # Vector from current node to neighbor
+                dx = nx - current_node.x
+                dy = ny - current_node.y
+
+                # Normalize the vector
+                length = math.sqrt(dx ** 2 + dy ** 2)
+                if length > 0:
+                    sum_dx += dx / length
+                    sum_dy += dy / length
+
+            # Average tangent direction
+            tangent_magnitude = math.sqrt(sum_dx ** 2 + sum_dy ** 2)
+            if tangent_magnitude > 0:
+                # Normalize tangent vector
+                tangent_dx = sum_dx / tangent_magnitude
+                tangent_dy = sum_dy / tangent_magnitude
+
+                # Calculate tangent angle (in radians)
+                tangent_angle = math.atan2(tangent_dy, tangent_dx)
+
+                # Calculate normal angle (perpendicular to tangent)
+                normal_angle = math.degrees(tangent_angle) + 90.0
+
+                # Normalize to 0-360 range
+                while normal_angle < 0:
+                    normal_angle += 360.0
+                while normal_angle >= 360.0:
+                    normal_angle -= 360.0
+
+                # Store the angle
+                node_angles[node_id] = normal_angle
+
+        return node_angles
 
     def clear_selection(self) -> None:
         """Clear the current element selection."""
