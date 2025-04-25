@@ -55,6 +55,7 @@ class CandeController:
 
         # Current display filter (None = show all)
         self.element_type_filter = None
+        self.on_element_type_change()  # Initialize filter based on checkboxes
 
         # Set up event handlers
         self._setup_callbacks()
