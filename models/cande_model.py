@@ -492,8 +492,8 @@ class CandeModel:
                 line_content=""
             )
 
-            # Get the angle for this node (or default to 0 if not calculated)
-            angle = node_angles.get(node_id, 0.0)
+            # Get the angle for this node
+            angle = node_angles[node_id]
 
             # Create interface element
             interface_element_id = max_element_id + 1

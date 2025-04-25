@@ -68,3 +68,8 @@ class InterfaceElement(BaseElement):
         super().__post_init__()
         if len(self.nodes) != 3:
             raise ValueError("Interface elements must consist of 3 nodes")
+        # Ensure angle is in the valid range
+        while self.angle < 0:
+            self.angle += 360.0
+        while self.angle >= 360.0:
+            self.angle -= 360.0

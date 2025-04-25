@@ -146,6 +146,34 @@ class CanvasView:
                     tags=(f"element_{element_id}",)
                 )
 
+                # After drawing the interface diamond:
+                if isinstance(element, InterfaceElement):
+                    # Draw angle indicator with a longer line
+                    indicator_length = 20  # Make this longer to be more visible
+                    angle_rad = math.radians(element.angle)
+                    indicator_x = avg_x + indicator_length * math.cos(angle_rad)
+                    indicator_y = avg_y + indicator_length * math.sin(angle_rad)
+
+                    # Create a more visible arrow
+                    self.canvas.create_line(
+                        avg_x, avg_y, indicator_x, indicator_y,
+                        fill="red",  # Bright color
+                        width=2,  # Thicker line
+                        arrow=tk.LAST,
+                        tags=(f"angle_indicator_{element_id}",)
+                    )
+
+                    # Add a small text label showing the angle value
+                    text_x = avg_x + (indicator_length + 5) * math.cos(angle_rad)
+                    text_y = avg_y + (indicator_length + 5) * math.sin(angle_rad)
+                    self.canvas.create_text(
+                        text_x, text_y,
+                        text=f"{element.angle:.0f}°",
+                        fill="blue",
+                        font=("Arial", 8),
+                        tags=(f"angle_text_{element_id}",)
+                    )
+
                 # Draw a selection indicator if the element is selected
                 if element_id in selected_elements:
                     self._draw_selection_indicator(avg_x, avg_y)
