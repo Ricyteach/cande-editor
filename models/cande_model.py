@@ -166,7 +166,8 @@ class CandeModel:
 
     def save_file(self, save_path: str) -> bool:
         """
-        Save the modified CANDE input file with any new nodes and interface elements.
+        Save the modified CANDE input file with any new nodes, interface elements,
+        and interface materials.
 
         Args:
             save_path: Path to save the file to
@@ -196,15 +197,83 @@ class CandeModel:
                 element_line = self._generate_element_line(element)
                 new_element_lines.append(element_line)
 
-        # Find appropriate insertion points and insert the new lines
+        # Find all interface elements and collect their material properties
+        interface_materials = {}  # Maps material_id to (friction, angle)
+        interface_material_mapping = {}  # Maps element_id to material_id
+
+        # First, assign material numbers to interface elements
+        next_material_id = 1
+        for element_id, element in self.elements.items():
+            if isinstance(element, InterfaceElement):
+                # Check if we already have a material with this friction and angle
+                material_key = (element.friction, element.angle)
+                material_id = next(
+                    (mid for mid, (f, a) in interface_materials.items()
+                     if abs(f - material_key[0]) < 1e-6 and abs(a - material_key[1]) < 1e-6),
+                    None
+                )
+
+                # If not found, create a new material
+                if material_id is None:
+                    material_id = next_material_id
+                    interface_materials[material_id] = material_key
+                    next_material_id += 1
+
+                # Map this element to the material
+                interface_material_mapping[element_id] = material_id
+
+        # Generate D-1 and D-2 lines for interface materials
+        interface_material_lines = []
+        for i, (material_id, (friction, angle)) in enumerate(sorted(interface_materials.items())):
+            # For the last material, use "L" in the first field, otherwise use " "
+            is_last = (i == len(interface_materials) - 1)
+            first_field = "L" if is_last else " "
+
+            # Material name: "Inter #X" where X is the material ID
+            material_name = f"Inter #{material_id}"
+
+            # D-1 line
+            d1_line = (f"                      D-1!!{first_field}{material_id:4d}{6:5d}"
+                       f"{0:10d}{material_name:>20s}\n")
+
+            # D-2 line
+            d2_line = f"            D-2.Interface!!{angle:10.3f}{friction:10.3f}\n"
+
+            interface_material_lines.append(d1_line)
+            interface_material_lines.append(d2_line)
+
+        # Update element material numbers for interface elements
+        for element_id, material_id in interface_material_mapping.items():
+            element = self.elements[element_id]
+            if element.line_number >= 0:  # Only update existing elements in the file
+                element.material = material_id
+
+                # Update the material field in the file line
+                line = self.file_content[element.line_number]
+
+                # Right-align material number within the field width
+                material_str = str(material_id).rjust(MATERIAL_FIELD_WIDTH)
+                if len(material_str) > MATERIAL_FIELD_WIDTH:
+                    material_str = material_str[-MATERIAL_FIELD_WIDTH:]  # Take only last chars if too long
+
+                # Get parts before and after the field we're modifying
+                prefix = line[:MATERIAL_START_POS] if len(line) > MATERIAL_START_POS else line
+                suffix = line[MATERIAL_END_POS:] if len(line) > MATERIAL_END_POS else ""
+
+                # Update the line
+                new_line = prefix + material_str + suffix
+                new_file_content[element.line_number] = new_line
+                element.line_content = new_line
+
+        # Find appropriate insertion points and insert the new content
+        # First, find insertion points for nodes and elements (similar to existing code)
         if new_node_lines or new_element_lines:
-            # Find the last node line to determine where to insert new nodes
-            # Note the last node line is supposed to have "L" directly after "!!"
+            # Code to insert nodes and elements (keep this part from your existing implementation)
+            # Node handling code...
             last_node_line = -1
             node_pattern = re.compile(r'^\s*C-3\.L3!!L')
 
-            # Find the last element line to determine where to insert new elements
-            # Note the last element line is supposed to have "L" directly after "!!"
+            # Element handling code...
             last_element_line = -1
             element_pattern = re.compile(r'^\s*C-4\.L3!!L')
 
@@ -218,21 +287,21 @@ class CandeModel:
 
             # Insert new nodes after the last node line
             if new_node_lines and last_node_line >= 0:
-                # remove "!!L" from previous last node line and replace with "!! "
+                # Remove "!!L" from previous last node line and replace with "!! "
                 new_file_content[last_node_line] = new_file_content[last_node_line].replace('!!L', '!! ')
                 for i, line in enumerate(new_node_lines):
                     new_file_content.insert(last_node_line + 1 + i, line)
                 else:
                     # Update the last element line index since we inserted nodes
                     last_element_line += len(new_node_lines)
-                    # also remove "!! " from last line and replace with "!!L"
+                    # Also remove "!! " from last line and replace with "!!L"
                     new_file_content[last_node_line + len(new_node_lines)] = (
                         new_file_content[last_node_line + len(new_node_lines)].replace('!! ', '!!L')
                     )
 
             # Insert new elements after the last element line
             if new_element_lines and last_element_line >= 0:
-                # remove "!!L" from previous last element line and replace with "!! "
+                # Remove "!!L" from previous last element line and replace with "!! "
                 new_file_content[last_element_line] = new_file_content[last_element_line].replace('!!L', '!! ')
                 for i, line in enumerate(new_element_lines):
                     new_file_content.insert(last_element_line + 1 + i, line)
@@ -241,6 +310,53 @@ class CandeModel:
                 new_file_content[last_element_line + len(new_element_lines)] = (
                     new_file_content[last_element_line + len(new_element_lines)].replace('!! ', '!!L')
                 )
+
+        # Now handle the interface material lines insertion
+        if interface_material_lines:
+            # Find where to insert the interface material lines
+            insertion_index = -1
+
+            # 1. Try to find existing "D-1!!" lines
+            existing_d1_line = -1
+            existing_d_pattern = re.compile(r'^\s*[D]-\d+.*!!.')  # Match any D line with a character after !!
+
+            for i, line in enumerate(new_file_content):
+                if "D-1!!" in line:
+                    existing_d1_line = i
+
+                # Find the last D-n line to insert after it
+                if existing_d_pattern.match(line):
+                    insertion_index = i
+
+            # 2. If no D lines found, find C-5 lines
+            if insertion_index < 0:
+                c5_pattern = re.compile(r'^\s*C-5.*!!L')
+                for i, line in enumerate(new_file_content):
+                    if c5_pattern.match(line):
+                        insertion_index = i
+                        break
+
+            # 3. If no C-5 lines, find the last C-4 line
+            if insertion_index < 0:
+                c4_pattern = re.compile(r'^\s*C-4.*!!L')
+                for i, line in enumerate(new_file_content):
+                    if c4_pattern.match(line):
+                        insertion_index = i
+                        break
+
+            if insertion_index >= 0:
+                # If we found existing D-1 lines, update the last one to remove the "L"
+                if existing_d1_line >= 0:
+                    # Find all D-1 lines
+                    d1_lines = [i for i, line in enumerate(new_file_content) if "D-1!!" in line]
+                    if d1_lines:
+                        # Update the last D-1 line to remove the "L" if it exists
+                        last_d1_line = d1_lines[-1]
+                        new_file_content[last_d1_line] = new_file_content[last_d1_line].replace('!!L', '!! ')
+
+                # Insert the interface material lines
+                for i, line in enumerate(interface_material_lines):
+                    new_file_content.insert(insertion_index + 1 + i, line)
 
         # Save the modified content
         try:
