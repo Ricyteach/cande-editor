@@ -610,98 +610,287 @@ class CandeModel:
         """
         node_angles = {}
 
-        # Find all nodes used by beam elements and which elements connect to them
+        # Build a node-to-elements map and a beam connectivity graph
         node_to_elements = {}
+        beam_graph = {}  # Maps (element_id, node_id) to connected elements
+
         for element_id, element in beam_collection.items():
             for node_id in element.nodes:
                 if node_id not in node_to_elements:
                     node_to_elements[node_id] = []
                 node_to_elements[node_id].append(element_id)
 
+                # Build the beam connectivity graph
+                if node_id not in beam_graph:
+                    beam_graph[node_id] = []
+                beam_graph[node_id].append(element_id)
+
         # For each node connected to exactly two beam elements, calculate the interface angle
         for node_id, element_ids in node_to_elements.items():
             if len(element_ids) != 2:
                 continue  # Skip nodes not connecting exactly two beam elements
 
-            # Get the shared node (interface location)
-            if node_id not in self.nodes:
-                continue
-            shared_node = self.nodes[node_id]
-            shared_point = (shared_node.x, shared_node.y)
+            # Try to calculate angle with direct endpoints first
+            angle = self._calculate_angle_for_node(node_id, element_ids, beam_collection)
 
-            # Get the two beam elements
-            beam1 = beam_collection[element_ids[0]]
-            beam2 = beam_collection[element_ids[1]]
+            # If we couldn't determine the angle (colinearity issue), try with extended search
+            if angle is None:
+                angle = self._calculate_angle_with_extended_search(
+                    node_id, element_ids, beam_collection, beam_graph, max_depth=3
+                )
 
-            # For each beam, find the other node (not the shared one)
-            endpoints = []
-            for beam in [beam1, beam2]:
-                for other_node_id in beam.nodes:
-                    if other_node_id != node_id and other_node_id in self.nodes:
-                        other_node = self.nodes[other_node_id]
-                        endpoints.append((other_node.x, other_node.y))
-                        break
+            # If we still couldn't determine the angle, use a default value
+            if angle is None:
+                angle = 0.0  # Default angle if all attempts fail
+                logger.warning(f"Could not determine angle for interface at node {node_id}, using default 0°")
 
-            # If we don't have two endpoints, skip this node
-            if len(endpoints) != 2:
-                continue
-
-            # Calculate the chord vector (from endpoint 0 to endpoint 1)
-            chord_vector = (endpoints[1][0] - endpoints[0][0],
-                            endpoints[1][1] - endpoints[0][1])
-
-            # Calculate the chord length
-            chord_length = math.sqrt(chord_vector[0] ** 2 + chord_vector[1] ** 2)
-
-            if chord_length < 1e-8:  # Avoid division by zero
-                continue
-
-            # Calculate the chord midpoint
-            chord_midpoint = ((endpoints[0][0] + endpoints[1][0]) / 2,
-                              (endpoints[0][1] + endpoints[1][1]) / 2)
-
-            # Calculate two possible perpendicular vectors to the chord
-            # (rotate 90 degrees CW and CCW)
-            perpendicular1 = (-chord_vector[1] / chord_length, chord_vector[0] / chord_length)  # 90° CCW
-            perpendicular2 = (chord_vector[1] / chord_length, -chord_vector[0] / chord_length)  # 90° CW
-
-            # Vector from chord midpoint to shared node
-            vector_to_shared = (shared_point[0] - chord_midpoint[0],
-                                shared_point[1] - chord_midpoint[1])
-
-            # Normalize vector_to_shared
-            mag_vector_to_shared = math.sqrt(vector_to_shared[0] ** 2 + vector_to_shared[1] ** 2)
-            if mag_vector_to_shared < 1e-8:  # Avoid division by zero
-                continue
-
-            vector_to_shared = (vector_to_shared[0] / mag_vector_to_shared,
-                                vector_to_shared[1] / mag_vector_to_shared)
-
-            # Determine which perpendicular vector points toward the shared node
-            # by comparing dot products
-            dot1 = perpendicular1[0] * vector_to_shared[0] + perpendicular1[1] * vector_to_shared[1]
-            dot2 = perpendicular2[0] * vector_to_shared[0] + perpendicular2[1] * vector_to_shared[1]
-
-            # Select the perpendicular that has a positive dot product with the vector to shared point
-            # (which means it points in roughly the same direction)
-            if dot1 > dot2:
-                chosen_perpendicular = perpendicular1
-            else:
-                chosen_perpendicular = perpendicular2
-
-            # Calculate the angle of this perpendicular vector from the horizontal
-            angle = math.degrees(math.atan2(chosen_perpendicular[1], chosen_perpendicular[0]))
-
-            # Normalize to 0-360 range
-            while angle < 0:
-                angle += 360.0
-            while angle >= 360.0:
-                angle -= 360.0
-
-            # Store the angle
+            # Store the calculated angle
             node_angles[node_id] = angle
 
         return node_angles
+
+    def _calculate_angle_for_node(self, shared_node_id: int, element_ids: List[int],
+                                  beam_collection: Dict[int, Element1D]) -> Optional[float]:
+        """
+        Calculate interface angle for a specific shared node between two beam elements.
+
+        Returns:
+            Calculated angle in degrees, or None if angle couldn't be determined
+        """
+        # Get the shared node (interface location)
+        if shared_node_id not in self.nodes:
+            return None
+        shared_node = self.nodes[shared_node_id]
+        shared_point = (shared_node.x, shared_node.y)
+
+        # Get the two beam elements
+        beam1 = beam_collection[element_ids[0]]
+        beam2 = beam_collection[element_ids[1]]
+
+        # For each beam, find the other node (not the shared one)
+        endpoints = []
+        for beam in [beam1, beam2]:
+            for other_node_id in beam.nodes:
+                if other_node_id != shared_node_id and other_node_id in self.nodes:
+                    other_node = self.nodes[other_node_id]
+                    endpoints.append((other_node.x, other_node.y))
+                    break
+
+        # If we don't have two endpoints, can't calculate
+        if len(endpoints) != 2:
+            return None
+
+        # Calculate the chord vector (from endpoint 0 to endpoint 1)
+        chord_vector = (endpoints[1][0] - endpoints[0][0],
+                        endpoints[1][1] - endpoints[0][1])
+
+        # Calculate the chord length
+        chord_length = math.sqrt(chord_vector[0] ** 2 + chord_vector[1] ** 2)
+
+        if chord_length < 1e-8:  # Avoid division by zero
+            return None
+
+        # Calculate the chord midpoint
+        chord_midpoint = ((endpoints[0][0] + endpoints[1][0]) / 2,
+                          (endpoints[0][1] + endpoints[1][1]) / 2)
+
+        # Vector from chord midpoint to shared node
+        vector_to_shared = (shared_point[0] - chord_midpoint[0],
+                            shared_point[1] - chord_midpoint[1])
+
+        # Normalize vector_to_shared
+        mag_vector_to_shared = math.sqrt(vector_to_shared[0] ** 2 + vector_to_shared[1] ** 2)
+
+        # Check for colinearity - if the shared point is too close to the chord
+        if mag_vector_to_shared < 1e-8:  # Colinear case
+            return None
+
+        # Normalize the vector
+        vector_to_shared = (vector_to_shared[0] / mag_vector_to_shared,
+                            vector_to_shared[1] / mag_vector_to_shared)
+
+        # Calculate two possible perpendicular vectors to the chord
+        perpendicular1 = (-chord_vector[1] / chord_length, chord_vector[0] / chord_length)  # 90° CCW
+        perpendicular2 = (chord_vector[1] / chord_length, -chord_vector[0] / chord_length)  # 90° CW
+
+        # Determine which perpendicular vector points toward the shared node
+        # by comparing dot products
+        dot1 = perpendicular1[0] * vector_to_shared[0] + perpendicular1[1] * vector_to_shared[1]
+        dot2 = perpendicular2[0] * vector_to_shared[0] + perpendicular2[1] * vector_to_shared[1]
+
+        # Select the perpendicular that has a positive dot product with the vector to shared point
+        chosen_perpendicular = perpendicular1 if dot1 > dot2 else perpendicular2
+
+        # Calculate the angle of this perpendicular vector from the horizontal
+        angle = math.degrees(math.atan2(chosen_perpendicular[1], chosen_perpendicular[0]))
+
+        # Normalize to 0-360 range
+        while angle < 0:
+            angle += 360.0
+        while angle >= 360.0:
+            angle -= 360.0
+
+        return angle
+
+    def _calculate_angle_with_extended_search(self, shared_node_id: int, element_ids: List[int],
+                                              beam_collection: Dict[int, Element1D],
+                                              beam_graph: Dict[int, List[int]],
+                                              max_depth: int = 3) -> Optional[float]:
+        """
+        Calculate interface angle by looking at extended beam connections when direct
+        calculation fails due to colinearity.
+
+        Args:
+            shared_node_id: ID of the shared node where angle is needed
+            element_ids: List of the two beam elements connected at the shared node
+            beam_collection: Dictionary of all beam elements
+            beam_graph: Graph mapping node IDs to connected element IDs
+            max_depth: Maximum depth to search for non-colinear configurations
+
+        Returns:
+            Calculated angle in degrees, or None if angle couldn't be determined
+        """
+        # Create a queue of node triplets to try [(shared_node, endpoint1, endpoint2), ...]
+        # Each triplet is a candidate for angle calculation
+        triplets_to_try = []
+
+        # Get the shared node
+        shared_node = self.nodes[shared_node_id]
+
+        # Get the two connected beam endpoints (first hop)
+        endpoints = []
+        beam_endpoints = {}  # Map element_id -> endpoint_node_id
+
+        for element_id in element_ids:
+            beam = beam_collection[element_id]
+            for node_id in beam.nodes:
+                if node_id != shared_node_id:
+                    endpoints.append(node_id)
+                    beam_endpoints[element_id] = node_id
+                    break
+
+        # Initial case - direct endpoints (depth 1)
+        triplets_to_try.append((shared_node_id, endpoints[0], endpoints[1]))
+
+        # Try combinations of extended endpoints (depths 2 to max_depth)
+        for depth in range(2, max_depth + 1):
+            # For each original beam, look further along the beam path
+            for i, start_element_id in enumerate(element_ids):
+                # Use BFS to find nodes at exact depth
+                frontier = [(beam_endpoints[start_element_id], start_element_id,
+                             1)]  # (node_id, last_element_id, current_depth)
+                visited = {shared_node_id, beam_endpoints[start_element_id]}
+
+                while frontier:
+                    current_node, last_element, current_depth = frontier.pop(0)
+
+                    if current_depth == depth:
+                        # Use this node with the direct endpoint from the other beam
+                        other_endpoint = beam_endpoints[element_ids[1 - i]]
+                        triplets_to_try.append((shared_node_id, current_node, other_endpoint))
+                        continue
+
+                    # Add connected nodes at next depth
+                    for next_element_id in beam_graph.get(current_node, []):
+                        # Skip the element we just came from
+                        if next_element_id == last_element:
+                            continue
+
+                        # Get the other node of this beam element
+                        beam = beam_collection.get(next_element_id)
+                        if not beam:
+                            continue
+
+                        for next_node_id in beam.nodes:
+                            if next_node_id != current_node and next_node_id not in visited:
+                                visited.add(next_node_id)
+                                frontier.append((next_node_id, next_element_id, current_depth + 1))
+
+        # Try each triplet until we find one that gives a valid angle
+        for shared, end1, end2 in triplets_to_try:
+            # Skip the initial case which we know failed
+            if end1 == endpoints[0] and end2 == endpoints[1]:
+                continue
+
+            # Try with this combination
+            angle = self._calculate_angle_for_triplet(shared, end1, end2)
+            if angle is not None:
+                return angle
+
+        # If all triplets failed, return None
+        return None
+
+    def _calculate_angle_for_triplet(self, shared_node_id: int, end1_id: int, end2_id: int) -> Optional[float]:
+        """
+        Calculate angle for a specific triplet of nodes.
+
+        Args:
+            shared_node_id: ID of the shared node
+            end1_id: ID of the first endpoint
+            end2_id: ID of the second endpoint
+
+        Returns:
+            Calculated angle in degrees, or None if angle couldn't be determined
+        """
+        # Check that all nodes exist
+        if any(node_id not in self.nodes for node_id in [shared_node_id, end1_id, end2_id]):
+            return None
+
+        shared_node = self.nodes[shared_node_id]
+        end1_node = self.nodes[end1_id]
+        end2_node = self.nodes[end2_id]
+
+        shared_point = (shared_node.x, shared_node.y)
+        endpoints = [(end1_node.x, end1_node.y), (end2_node.x, end2_node.y)]
+
+        # Calculate the chord vector (from endpoint 0 to endpoint 1)
+        chord_vector = (endpoints[1][0] - endpoints[0][0],
+                        endpoints[1][1] - endpoints[0][1])
+
+        # Calculate the chord length
+        chord_length = math.sqrt(chord_vector[0] ** 2 + chord_vector[1] ** 2)
+
+        if chord_length < 1e-8:  # Endpoints are at the same location
+            return None
+
+        # Calculate the chord midpoint
+        chord_midpoint = ((endpoints[0][0] + endpoints[1][0]) / 2,
+                          (endpoints[0][1] + endpoints[1][1]) / 2)
+
+        # Vector from chord midpoint to shared node
+        vector_to_shared = (shared_point[0] - chord_midpoint[0],
+                            shared_point[1] - chord_midpoint[1])
+
+        # Normalize vector_to_shared
+        mag_vector_to_shared = math.sqrt(vector_to_shared[0] ** 2 + vector_to_shared[1] ** 2)
+
+        # Check for colinearity - if the shared point is too close to the chord
+        if mag_vector_to_shared < 1e-8:  # Colinear case
+            return None
+
+        # Normalize the vector
+        vector_to_shared = (vector_to_shared[0] / mag_vector_to_shared,
+                            vector_to_shared[1] / mag_vector_to_shared)
+
+        # Calculate perpendicular vectors to the chord (90° CCW and CW)
+        perpendicular1 = (-chord_vector[1] / chord_length, chord_vector[0] / chord_length)
+        perpendicular2 = (chord_vector[1] / chord_length, -chord_vector[0] / chord_length)
+
+        # Choose the perpendicular that points toward the shared node
+        dot1 = perpendicular1[0] * vector_to_shared[0] + perpendicular1[1] * vector_to_shared[1]
+        dot2 = perpendicular2[0] * vector_to_shared[0] + perpendicular2[1] * vector_to_shared[1]
+        chosen_perpendicular = perpendicular1 if dot1 > dot2 else perpendicular2
+
+        # Calculate angle from horizontal
+        angle = math.degrees(math.atan2(chosen_perpendicular[1], chosen_perpendicular[0]))
+
+        # Normalize to 0-360 range
+        while angle < 0:
+            angle += 360.0
+        while angle >= 360.0:
+            angle -= 360.0
+
+        return angle
 
     def clear_selection(self) -> None:
         """Clear the current element selection."""
