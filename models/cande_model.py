@@ -138,7 +138,8 @@ class CandeModel:
                     line_number=line_num,
                     line_content=line,
                 )
-
+                if isinstance(self.elements[element_id], Element2D):
+                    self.ensure_valid_2d_element_ordering(self.elements[element_id])
                 # Update max material and step numbers
                 self.max_material = max(self.max_material, material)
                 self.max_step = max(self.max_step, step)
@@ -189,14 +190,6 @@ class CandeModel:
                 node_line = self._generate_node_line(node)
                 new_node_lines.append(node_line)
 
-        # Add new elements (those with line_number == -1)
-        new_element_lines = []
-        for element_id, element in self.elements.items():
-            if element.line_number == -1:
-                # Generate element line in CANDE format
-                element_line = self._generate_element_line(element)
-                new_element_lines.append(element_line)
-
         # Find all interface elements and collect their material properties
         interface_materials = {}  # Maps material_id to (friction, angle)
         interface_material_mapping = {}  # Maps element_id to material_id
@@ -219,8 +212,17 @@ class CandeModel:
                     interface_materials[material_id] = material_key
                     next_material_id += 1
 
-                # Map this element to the material
+                # Map this element to the material and update the element's material property
                 interface_material_mapping[element_id] = material_id
+                element.material = material_id  # Update the material number in memory
+
+        # Now create element lines with the updated material numbers
+        new_element_lines = []
+        for element_id, element in self.elements.items():
+            if element.line_number == -1:
+                # Generate element line in CANDE format with the updated material number
+                element_line = self._generate_element_line(element)
+                new_element_lines.append(element_line)
 
         # Generate D-1 and D-2 lines for interface materials
         interface_material_lines = []
@@ -242,12 +244,10 @@ class CandeModel:
             interface_material_lines.append(d1_line)
             interface_material_lines.append(d2_line)
 
-        # Update element material numbers for interface elements
+        # Update existing interface elements in the file with new material IDs
         for element_id, material_id in interface_material_mapping.items():
             element = self.elements[element_id]
             if element.line_number >= 0:  # Only update existing elements in the file
-                element.material = material_id
-
                 # Update the material field in the file line
                 line = self.file_content[element.line_number]
 
@@ -366,27 +366,6 @@ class CandeModel:
         except Exception as e:
             logger.error(f"Error saving file: {str(e)}")
             return False
-
-    def element_matches_filter(self, element: BaseElement, element_type_filter: Optional[str]) -> bool:
-        """
-        Check if an element matches the current type filter.
-
-        Args:
-            element: The element to check
-            element_type_filter: The current element type filter ("1D", "2D", "Interface", or None)
-
-        Returns:
-            True if the element matches the filter or if there is no filter
-        """
-        if element_type_filter is None:
-            return True
-        elif element_type_filter == "1D" and isinstance(element, Element1D):
-            return True
-        elif element_type_filter == "2D" and isinstance(element, Element2D):
-            return True
-        elif element_type_filter == "Interface" and isinstance(element, InterfaceElement):
-            return True
-        return False
 
     def select_elements_by_material(self, material, element_type_filter=None) -> int:
         """
@@ -1047,3 +1026,93 @@ class CandeModel:
         # Adjust format based on your CANDE file format
         return (f"                   C-4.L3!! {element.element_id:4d}{node_ids[0]:5d}{node_ids[1]:5d}{node_ids[2]:5d}"
                 f"{node_ids[3]:5d}{element.material:5d}{element.step:5d}{element_type:5d}\n")
+
+    def ensure_valid_2d_element_ordering(self, element: Element2D) -> bool:
+        """
+        Ensure that 2D element nodes are ordered properly and in CCW orientation.
+        Handles both triangular and quadrilateral elements.
+
+        Args:
+            element: The 2D element to check and potentially reorder
+
+        Returns:
+            True if the element was successfully ordered or already valid,
+            False if the element has an invalid configuration that can't be fixed
+        """
+        # Get node coordinates
+        node_coords = []
+        node_ids = []
+        for node_id in element.nodes:
+            if node_id in self.nodes:
+                node = self.nodes[node_id]
+                node_coords.append((node.x, node.y))
+                node_ids.append(node_id)
+            else:
+                logger.warning(f"Missing node {node_id} for element {element.element_id}")
+                return False
+
+        # For triangles (3 nodes)
+        if len(node_coords) == 3:
+            # Calculate signed area
+            (x1, y1), (x2, y2), (x3, y3) = node_coords
+            signed_area = 0.5 * ((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1))
+
+            # If area is negative, reverse node order to make it CCW
+            if signed_area < 0:
+                element.nodes = list(reversed(element.nodes))
+                logger.info(f"Reordered triangle nodes for element {element.element_id} to ensure CCW orientation")
+            return True
+
+        # For quadrilaterals (4 nodes)
+        elif len(node_coords) == 4:
+            # Find the centroid
+            centroid_x = sum(x for x, _ in node_coords) / 4
+            centroid_y = sum(y for _, y in node_coords) / 4
+
+            # Calculate angles from centroid to each node
+            angles = []
+            for x, y in node_coords:
+                angle = math.atan2(y - centroid_y, x - centroid_x)
+                angles.append(angle)
+
+            # Sort nodes by angle around centroid (this gives CCW order)
+            sorted_indices = sorted(range(4), key=lambda i: angles[i])
+
+            # Check if we need to reorder
+            if sorted_indices != [0, 1, 2, 3]:
+                # Reorder nodes
+                new_node_ids = [node_ids[i] for i in sorted_indices]
+                element.nodes = new_node_ids
+                logger.info(f"Reordered quad nodes for element {element.element_id} to ensure CCW orientation")
+
+            # Verify the result is not self-intersecting
+            new_coords = [node_coords[i] for i in sorted_indices]
+            if self._is_self_intersecting(new_coords):
+                logger.warning(f"Element {element.element_id} forms a self-intersecting quad")
+                return False
+
+            return True
+
+        else:
+            logger.warning(f"Element {element.element_id} has {len(node_coords)} nodes, expected 3 or 4")
+            return False
+
+    def _is_self_intersecting(self, quad_coords):
+        """Check if a quadrilateral defined by 4 coordinates is self-intersecting."""
+        # Check if any two non-adjacent edges intersect
+        # Edge 0-1 vs Edge 2-3
+        if self._lines_intersect(quad_coords[0], quad_coords[1], quad_coords[2], quad_coords[3]):
+            return True
+        # Edge 1-2 vs Edge 3-0
+        if self._lines_intersect(quad_coords[1], quad_coords[2], quad_coords[3], quad_coords[0]):
+            return True
+        return False
+
+    def _lines_intersect(self, p1, p2, p3, p4):
+        """Check if line segment p1-p2 intersects with line segment p3-p4."""
+
+        # Implementation of line segment intersection test
+        def ccw(a, b, c):
+            return (c[1] - a[1]) * (b[0] - a[0]) > (b[1] - a[1]) * (c[0] - a[0])
+
+        return ccw(p1, p3, p4) != ccw(p2, p3, p4) and ccw(p1, p2, p3) != ccw(p1, p2, p4)
