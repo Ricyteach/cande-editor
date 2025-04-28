@@ -599,6 +599,8 @@ class CandeModel:
     def _calculate_beam_angles(self, beam_collection: Dict[int, Element1D]) -> Dict[int, float]:
         """
         Calculate interface angles for nodes in beam elements based on beam directions.
+        Uses a vector perpendicular to the chord connecting beam endpoints, with direction
+        determined by the position of the shared node.
 
         Args:
             beam_collection: Dictionary of beam elements to analyze
@@ -608,63 +610,87 @@ class CandeModel:
         """
         node_angles = {}
 
-        # Find all nodes used by beam elements
-        beam_nodes = {}
+        # Find all nodes used by beam elements and which elements connect to them
+        node_to_elements = {}
         for element_id, element in beam_collection.items():
             for node_id in element.nodes:
-                if node_id not in beam_nodes:
-                    beam_nodes[node_id] = []
-                beam_nodes[node_id].append(element_id)
+                if node_id not in node_to_elements:
+                    node_to_elements[node_id] = []
+                node_to_elements[node_id].append(element_id)
 
-        # For each node, calculate angle based on connected beams
-        for node_id, element_ids in beam_nodes.items():
-            if node_id not in self.nodes or len(element_ids) < 1:
+        # For each node connected to exactly two beam elements, calculate the interface angle
+        for node_id, element_ids in node_to_elements.items():
+            if len(element_ids) != 2:
+                continue  # Skip nodes not connecting exactly two beam elements
+
+            # Get the shared node (interface location)
+            if node_id not in self.nodes:
                 continue
+            shared_node = self.nodes[node_id]
+            shared_point = (shared_node.x, shared_node.y)
 
-            current_node = self.nodes[node_id]
+            # Get the two beam elements
+            beam1 = beam_collection[element_ids[0]]
+            beam2 = beam_collection[element_ids[1]]
 
-            # Get vectors from current node to connected nodes
-            vectors = []
-            for element_id in element_ids:
-                element = beam_collection[element_id]
-                # Find the other node in this element
-                other_node_id = None
-                for n_id in element.nodes:
-                    if n_id != node_id and n_id in self.nodes:
-                        other_node_id = n_id
+            # For each beam, find the other node (not the shared one)
+            endpoints = []
+            for beam in [beam1, beam2]:
+                for other_node_id in beam.nodes:
+                    if other_node_id != node_id and other_node_id in self.nodes:
+                        other_node = self.nodes[other_node_id]
+                        endpoints.append((other_node.x, other_node.y))
                         break
 
-                if other_node_id is not None:
-                    other_node = self.nodes[other_node_id]
-                    # Calculate vector from current node to other node
-                    dx = other_node.x - current_node.x
-                    dy = other_node.y - current_node.y
-                    length = math.sqrt(dx ** 2 + dy ** 2)
-                    if length > 0:
-                        vectors.append((dx / length, dy / length))
-
-            # If no valid vectors, skip this node
-            if not vectors:
+            # If we don't have two endpoints, skip this node
+            if len(endpoints) != 2:
                 continue
 
-            # Average the vectors
-            avg_dx = sum(v[0] for v in vectors) / len(vectors)
-            avg_dy = sum(v[1] for v in vectors) / len(vectors)
+            # Calculate the chord vector (from endpoint 0 to endpoint 1)
+            chord_vector = (endpoints[1][0] - endpoints[0][0],
+                            endpoints[1][1] - endpoints[0][1])
 
-            # Calculate the beam direction angle
-            beam_angle = math.degrees(math.atan2(avg_dy, avg_dx))
+            # Calculate the chord length
+            chord_length = math.sqrt(chord_vector[0] ** 2 + chord_vector[1] ** 2)
 
-            # Interface normal is perpendicular to beam direction
-            normal_angle = beam_angle + 90.0
+            if chord_length < 1e-8:  # Avoid division by zero
+                continue
+
+            # Calculate two possible perpendicular vectors to the chord
+            # (rotate 90 degrees CW and CCW)
+            perpendicular1 = (-chord_vector[1] / chord_length, chord_vector[0] / chord_length)  # 90° CCW
+            perpendicular2 = (chord_vector[1] / chord_length, -chord_vector[0] / chord_length)  # 90° CW
+
+            # Calculate the midpoint of the chord
+            chord_midpoint = ((endpoints[0][0] + endpoints[1][0]) / 2,
+                              (endpoints[0][1] + endpoints[1][1]) / 2)
+
+            # Determine which perpendicular vector points toward the shared node
+            # by comparing dot products
+            vector_to_shared = (shared_point[0] - chord_midpoint[0],
+                                shared_point[1] - chord_midpoint[1])
+
+            dot1 = perpendicular1[0] * vector_to_shared[0] + perpendicular1[1] * vector_to_shared[1]
+            dot2 = perpendicular2[0] * vector_to_shared[0] + perpendicular2[1] * vector_to_shared[1]
+
+            # Select the perpendicular that has a positive dot product with the vector to shared point
+            # (which means it points in roughly the same direction)
+            if dot1 > dot2:
+                chosen_perpendicular = perpendicular1
+            else:
+                chosen_perpendicular = perpendicular2
+
+            # Calculate the angle of this perpendicular vector from the horizontal
+            angle = math.degrees(math.atan2(chosen_perpendicular[1], chosen_perpendicular[0]))
 
             # Normalize to 0-360 range
-            while normal_angle < 0:
-                normal_angle += 360.0
-            while normal_angle >= 360.0:
-                normal_angle -= 360.0
+            while angle < 0:
+                angle += 360.0
+            while angle >= 360.0:
+                angle -= 360.0
 
             # Store the angle
-            node_angles[node_id] = normal_angle
+            node_angles[node_id] = angle
 
         return node_angles
 
