@@ -656,20 +656,29 @@ class CandeModel:
             if chord_length < 1e-8:  # Avoid division by zero
                 continue
 
+            # Calculate the chord midpoint
+            chord_midpoint = ((endpoints[0][0] + endpoints[1][0]) / 2,
+                              (endpoints[0][1] + endpoints[1][1]) / 2)
+
             # Calculate two possible perpendicular vectors to the chord
             # (rotate 90 degrees CW and CCW)
             perpendicular1 = (-chord_vector[1] / chord_length, chord_vector[0] / chord_length)  # 90° CCW
             perpendicular2 = (chord_vector[1] / chord_length, -chord_vector[0] / chord_length)  # 90° CW
 
-            # Calculate the midpoint of the chord
-            chord_midpoint = ((endpoints[0][0] + endpoints[1][0]) / 2,
-                              (endpoints[0][1] + endpoints[1][1]) / 2)
-
-            # Determine which perpendicular vector points toward the shared node
-            # by comparing dot products
+            # Vector from chord midpoint to shared node
             vector_to_shared = (shared_point[0] - chord_midpoint[0],
                                 shared_point[1] - chord_midpoint[1])
 
+            # Normalize vector_to_shared
+            mag_vector_to_shared = math.sqrt(vector_to_shared[0] ** 2 + vector_to_shared[1] ** 2)
+            if mag_vector_to_shared < 1e-8:  # Avoid division by zero
+                continue
+
+            vector_to_shared = (vector_to_shared[0] / mag_vector_to_shared,
+                                vector_to_shared[1] / mag_vector_to_shared)
+
+            # Determine which perpendicular vector points toward the shared node
+            # by comparing dot products
             dot1 = perpendicular1[0] * vector_to_shared[0] + perpendicular1[1] * vector_to_shared[1]
             dot2 = perpendicular2[0] * vector_to_shared[0] + perpendicular2[1] * vector_to_shared[1]
 

@@ -152,7 +152,8 @@ class CanvasView:
                     indicator_length = 20  # Make this longer to be more visible
                     angle_rad = math.radians(element.angle)
                     indicator_x = avg_x + indicator_length * math.cos(angle_rad)
-                    indicator_y = avg_y + indicator_length * math.sin(angle_rad)
+                    # Flip the y direction since canvas has y increasing downward
+                    indicator_y = avg_y - indicator_length * math.sin(angle_rad)
 
                     # Create a more visible arrow
                     self.canvas.create_line(
