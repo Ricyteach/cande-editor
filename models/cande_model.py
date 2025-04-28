@@ -639,10 +639,9 @@ class CandeModel:
                     node_id, element_ids, beam_collection, beam_graph, max_depth=3
                 )
 
-            # If we still couldn't determine the angle, use a default value
+            # If we still couldn't determine the angle, skip (section is too flat to calculate)
             if angle is None:
-                angle = 0.0  # Default angle if all attempts fail
-                logger.warning(f"Could not determine angle for interface at node {node_id}, using default 0°")
+                continue
 
             # Store the calculated angle
             node_angles[node_id] = angle
