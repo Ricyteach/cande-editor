@@ -182,6 +182,35 @@ class CandeModel:
         # Copy file content for modification
         new_file_content = list(self.file_content)
 
+        # Update existing elements' node references
+        for element_id, element in self.elements.items():
+            if element.line_number >= 0:  # Only update existing elements in the file
+                # Check if we need to update the line (compare with original content)
+                original_line = self.file_content[element.line_number]
+                if original_line != element.line_content:
+                    # Generate updated element line
+                    pattern = re.compile(
+                        r'^\s*C-4\.L3!![ L]+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+(\d+))?')
+                    match = pattern.match(original_line)
+
+                    if match:
+                        # Extract fields that should stay the same
+                        first_part = original_line[:match.start(2)]  # Everything up to first node ID
+                        last_part = original_line[match.end(5):]  # Everything after last node ID
+
+                        # Get up to 4 node IDs, using 0 for missing nodes
+                        node_ids = element.nodes + [0] * (4 - len(element.nodes))
+
+                        # Reconstruct the line with updated node IDs
+                        updated_line = first_part
+                        for i, node_id in enumerate(node_ids):
+                            updated_line += f"{node_id:5d}"
+                        updated_line += last_part
+
+                        # Update the line in the file content
+                        new_file_content[element.line_number] = updated_line
+                        element.line_content = updated_line
+
         # Add new nodes (those with line_number == -1)
         new_node_lines = []
         for node_id, node in self.nodes.items():
@@ -190,39 +219,39 @@ class CandeModel:
                 node_line = self._generate_node_line(node)
                 new_node_lines.append(node_line)
 
-        # Find all interface elements and collect their material properties
+        # Find all interface elements in geometric order
+        interface_elements = []
+        for element_id, element in sorted(self.elements.items()):
+            if isinstance(element, InterfaceElement) and element.line_number == -1:
+                interface_elements.append((element_id, element))
+
+        # Add new elements (including interface elements in geometric order)
+        new_element_lines = []
+        for element_id, element in self.elements.items():
+            if element.line_number == -1 and not isinstance(element, InterfaceElement):
+                # Generate element line in CANDE format (non-interface elements)
+                element_line = self._generate_element_line(element)
+                new_element_lines.append(element_line)
+
+        # Now add interface elements in geometric order
+        for element_id, element in interface_elements:
+            element_line = self._generate_element_line(element)
+            new_element_lines.append(element_line)
+
+        # Interface material handling is similar to existing code, but ensures ordering is preserved
         interface_materials = {}  # Maps material_id to (friction, angle)
         interface_material_mapping = {}  # Maps element_id to material_id
 
-        # First, assign material numbers to interface elements
+        # Assign material numbers to interface elements in geometric order
         next_material_id = 1
-        for element_id, element in self.elements.items():
-            if isinstance(element, InterfaceElement):
-                # Check if we already have a material with this friction and angle
-                material_key = (element.friction, element.angle)
-                material_id = next(
-                    (mid for mid, (f, a) in interface_materials.items()
-                     if abs(f - material_key[0]) < 1e-6 and abs(a - material_key[1]) < 1e-6),
-                    None
-                )
+        for element_id, element in interface_elements:
+            # Create a unique material for each interface element to preserve ordering
+            material_id = next_material_id
+            interface_materials[material_id] = (element.friction, element.angle)
+            next_material_id += 1
 
-                # If not found, create a new material
-                if material_id is None:
-                    material_id = next_material_id
-                    interface_materials[material_id] = material_key
-                    next_material_id += 1
-
-                # Map this element to the material and update the element's material property
-                interface_material_mapping[element_id] = material_id
-                element.material = material_id  # Update the material number in memory
-
-        # Now create element lines with the updated material numbers
-        new_element_lines = []
-        for element_id, element in self.elements.items():
-            if element.line_number == -1:
-                # Generate element line in CANDE format with the updated material number
-                element_line = self._generate_element_line(element)
-                new_element_lines.append(element_line)
+            # Map this element to the material
+            interface_material_mapping[element_id] = material_id
 
         # Generate D-1 and D-2 lines for interface materials
         interface_material_lines = []
@@ -246,24 +275,30 @@ class CandeModel:
 
         # Update existing interface elements in the file with new material IDs
         for element_id, material_id in interface_material_mapping.items():
-            element = self.elements[element_id]
-            if element.line_number >= 0:  # Only update existing elements in the file
-                # Update the material field in the file line
-                line = self.file_content[element.line_number]
+            if element_id in self.elements:
+                element = self.elements[element_id]
+                element.material = material_id
 
-                # Right-align material number within the field width
-                material_str = str(material_id).rjust(MATERIAL_FIELD_WIDTH)
-                if len(material_str) > MATERIAL_FIELD_WIDTH:
-                    material_str = material_str[-MATERIAL_FIELD_WIDTH:]  # Take only last chars if too long
+                # If the element exists in the file already, update its material number
+                if element.line_number >= 0:
+                    element = self.elements[element_id]
+                    if element.line_number >= 0:  # Only update existing elements in the file
+                        # Update the material field in the file line
+                        line = self.file_content[element.line_number]
 
-                # Get parts before and after the field we're modifying
-                prefix = line[:MATERIAL_START_POS] if len(line) > MATERIAL_START_POS else line
-                suffix = line[MATERIAL_END_POS:] if len(line) > MATERIAL_END_POS else ""
+                        # Right-align material number within the field width
+                        material_str = str(material_id).rjust(MATERIAL_FIELD_WIDTH)
+                        if len(material_str) > MATERIAL_FIELD_WIDTH:
+                            material_str = material_str[-MATERIAL_FIELD_WIDTH:]  # Take only last chars if too long
 
-                # Update the line
-                new_line = prefix + material_str + suffix
-                new_file_content[element.line_number] = new_line
-                element.line_content = new_line
+                        # Get parts before and after the field we're modifying
+                        prefix = line[:MATERIAL_START_POS] if len(line) > MATERIAL_START_POS else line
+                        suffix = line[MATERIAL_END_POS:] if len(line) > MATERIAL_END_POS else ""
+
+                        # Update the line
+                        new_line = prefix + material_str + suffix
+                        new_file_content[element.line_number] = new_line
+                        element.line_content = new_line
 
         # Find appropriate insertion points and insert the new content
         # First, find insertion points for nodes and elements (similar to existing code)
@@ -547,72 +582,205 @@ class CandeModel:
         # Calculate angles
         node_angles = self._calculate_beam_angles(beam_elements)
 
-        # Find nodes shared between selected beam elements (that are also shared by 2D elements)
-        shared_nodes = self._find_shared_beam_nodes(beam_elements)
+        # NEW PART: Find connected beam chains to preserve geometric ordering
+        beam_chains = self._find_beam_chains(beam_elements)
 
         # Track new nodes and elements created
         interface_count = 0
         max_node_id = max(self.nodes.keys()) if self.nodes else 0
         max_element_id = max(self.elements.keys()) if self.elements else 0
 
-        # For each shared node
-        for node_id in shared_nodes:
-            # Create new I (inside) node
-            i_node_id = max_node_id + 1
-            max_node_id += 1
+        # Process each beam chain to create interface elements in geometric order
+        for chain in beam_chains:
+            # Skip chains with only one beam (no shared nodes)
+            if len(chain) <= 1:
+                continue
 
-            # Create new K (dummy) node with ID > both I and J
-            k_node_id = max_node_id + 1
-            max_node_id += 1
+            # Extract the shared nodes from the chain
+            shared_nodes = self._extract_shared_nodes_from_chain(chain, beam_elements)
 
-            # Original node becomes J (outside)
-            j_node_id = node_id
+            # For each shared node in the chain (in geometric order)
+            for node_id in shared_nodes:
+                # Create new I (inside) node
+                i_node_id = max_node_id + 1
+                max_node_id += 1
 
-            # Copy coordinates from original node
-            original_node = self.nodes[node_id]
+                # Create new K (dummy) node with ID > both I and J
+                k_node_id = max_node_id + 1
+                max_node_id += 1
 
-            # Create new nodes with same coordinates
-            self.nodes[i_node_id] = Node(
-                node_id=i_node_id,
-                x=original_node.x,
-                y=original_node.y,
-                line_number=-1,  # Will be assigned when saving
-                line_content=""  # Will be generated when saving
-            )
+                # Original node becomes J (outside)
+                j_node_id = node_id
 
-            self.nodes[k_node_id] = Node(
-                node_id=k_node_id,
-                x=original_node.x,
-                y=original_node.y,
-                line_number=-1,
-                line_content=""
-            )
+                # Copy coordinates from original node
+                original_node = self.nodes[node_id]
 
-            # Get the angle for this node (with default value of 0.0 if not found)
-            angle = node_angles.get(node_id, 0.0)
+                # Create new nodes with same coordinates
+                self.nodes[i_node_id] = Node(
+                    node_id=i_node_id,
+                    x=original_node.x,
+                    y=original_node.y,
+                    line_number=-1,  # Will be assigned when saving
+                    line_content=""  # Will be generated when saving
+                )
 
-            # Create interface element
-            interface_element_id = max_element_id + 1
-            max_element_id += 1
+                self.nodes[k_node_id] = Node(
+                    node_id=k_node_id,
+                    x=original_node.x,
+                    y=original_node.y,
+                    line_number=-1,
+                    line_content=""
+                )
 
-            self.elements[interface_element_id] = InterfaceElement(
-                element_id=interface_element_id,
-                nodes=[i_node_id, j_node_id, k_node_id],
-                material=1,  # Default material
-                step=1,  # Default step
-                friction=friction,  # User specified friction
-                angle=angle,  # Calculated angle
-                line_number=-1,
-                line_content=""
-            )
+                # Get the angle for this node (with default value of 0.0 if not found)
+                angle = node_angles.get(node_id, 0.0)
 
-            interface_count += 1
+                # Create interface element
+                interface_element_id = max_element_id + 1
+                max_element_id += 1
 
-            # Update beam elements to use the new I node instead of original
-            # ONLY UPDATE BEAM ELEMENTS IN THE SELECTION
-            self._update_beam_elements_for_interface(node_id, i_node_id, beam_elements.keys())
+                self.elements[interface_element_id] = InterfaceElement(
+                    element_id=interface_element_id,
+                    nodes=[i_node_id, j_node_id, k_node_id],
+                    material=1,  # Default material, will be updated by save_file
+                    step=1,  # Default step
+                    friction=friction,  # User specified friction
+                    angle=angle,  # Calculated angle
+                    line_number=-1,
+                    line_content=""
+                )
+
+                interface_count += 1
+
+                # Update beam elements to use the new I node instead of original
+                # ONLY UPDATE BEAM ELEMENTS IN THE SELECTION
+                self._update_beam_elements_for_interface(node_id, i_node_id, beam_elements.keys())
 
         return interface_count
+
+    def _find_beam_chains(self, beam_elements: Dict[int, Element1D]) -> List[List[int]]:
+        """
+        Find chains of connected beam elements in geometric order.
+
+        Args:
+            beam_elements: Dictionary of beam elements to analyze
+
+        Returns:
+            List of chains, where each chain is a list of beam element IDs in geometric order
+        """
+        # Create a graph of beam connections
+        beam_graph = {}  # node_id -> [(element_id, other_node_id), ...]
+
+        # Build the graph
+        for element_id, element in beam_elements.items():
+            node1, node2 = element.nodes
+
+            # Add connection from node1 to node2
+            if node1 not in beam_graph:
+                beam_graph[node1] = []
+            beam_graph[node1].append((element_id, node2))
+
+            # Add connection from node2 to node1
+            if node2 not in beam_graph:
+                beam_graph[node2] = []
+            beam_graph[node2].append((element_id, node1))
+
+        # Find all chains by traversing the graph
+        chains = []
+        visited_elements = set()
+
+        # Start from each beam that hasn't been visited yet
+        for element_id, element in beam_elements.items():
+            if element_id in visited_elements:
+                continue
+
+            # Found a new chain
+            chain = [element_id]
+            visited_elements.add(element_id)
+
+            # Start with the two endpoint nodes of this beam
+            node1, node2 = element.nodes
+
+            # Try to extend chain in both directions
+            for start_node in [node1, node2]:
+                # Find the other node in the current beam
+                other_node = node2 if start_node == node1 else node1
+
+                # Continue extending the chain until we can't anymore
+                current_node = start_node
+                prev_node = other_node
+
+                while True:
+                    # Find next beam connected to current_node that isn't already in the chain
+                    next_beam = None
+                    next_node = None
+
+                    for beam_id, conn_node in beam_graph.get(current_node, []):
+                        if beam_id not in visited_elements and conn_node != prev_node:
+                            next_beam = beam_id
+                            next_node = conn_node
+                            break
+
+                    if next_beam is None:
+                        # No more beams to add in this direction
+                        break
+
+                    # Add the next beam to the chain
+                    if start_node == node1:
+                        # Extending forward
+                        chain.append(next_beam)
+                    else:
+                        # Extending backward
+                        chain.insert(0, next_beam)
+
+                    visited_elements.add(next_beam)
+                    prev_node = current_node
+                    current_node = next_node
+
+            # Add the chain to our list
+            chains.append(chain)
+
+        return chains
+
+    def _extract_shared_nodes_from_chain(self, chain: List[int],
+                                         beam_elements: Dict[int, Element1D]) -> List[int]:
+        """
+        Extract shared nodes from a chain of beam elements in geometric order.
+
+        Args:
+            chain: List of beam element IDs in geometric order
+            beam_elements: Dictionary of beam elements
+
+        Returns:
+            List of shared node IDs in geometric order
+        """
+        if len(chain) <= 1:
+            return []
+
+        # Find geometric order of nodes in the chain
+        first_beam = beam_elements[chain[0]]
+        node1, node2 = first_beam.nodes
+
+        # Try to determine consistent order by checking connection with second beam
+        second_beam = beam_elements[chain[1]]
+        if node1 in second_beam.nodes:
+            chain_nodes = [node2, node1]  # node1 is shared with second beam
+        else:
+            chain_nodes = [node1, node2]  # node2 is shared with second beam
+
+        # Walk through remaining beams to add their nodes in order
+        for i in range(1, len(chain)):
+            beam = beam_elements[chain[i]]
+            last_node = chain_nodes[-1]
+
+            # Find the next node (not the one we just added)
+            next_node = [n for n in beam.nodes if n != last_node][0]
+            chain_nodes.append(next_node)
+
+        # Extract only the shared nodes (those appearing at the junction between beams)
+        shared_nodes = chain_nodes[1:-1]
+
+        return shared_nodes
 
     def _find_shared_beam_nodes(self, beam_collection=None) -> Set[int]:
         """
@@ -690,6 +858,32 @@ class CandeModel:
                     # Replace the old node with the new one
                     new_nodes = [new_node_id if n == old_node_id else n for n in element.nodes]
                     element.nodes = new_nodes
+
+                    # If this is an existing element in the file, update its line_content
+                    if element.line_number >= 0 and element.line_number < len(self.file_content):
+                        original_line = self.file_content[element.line_number]
+
+                        # Use regex to find the node IDs in the line
+                        pattern = re.compile(
+                            r'^\s*C-4\.L3!![ L]+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+(\d+))?')
+                        match = pattern.match(original_line)
+
+                        if match:
+                            # Extract parts before and after the node IDs
+                            first_part = original_line[:match.start(2)]  # Everything up to first node ID
+                            last_part = original_line[match.end(5):]  # Everything after last node ID
+
+                            # Get up to 4 node IDs, using 0 for missing nodes
+                            node_ids = element.nodes + [0] * (4 - len(element.nodes))
+
+                            # Reconstruct the line with updated node IDs
+                            updated_line = first_part
+                            for i, node_id in enumerate(node_ids):
+                                updated_line += f"{node_id:5d}"
+                            updated_line += last_part
+
+                            # Update the line content in the element
+                            element.line_content = updated_line
 
     def _calculate_beam_angles(self, beam_collection: Dict[int, Element1D]) -> Dict[int, float]:
         """
