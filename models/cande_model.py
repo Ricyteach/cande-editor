@@ -2,12 +2,12 @@
 Main model class for CANDE Input File Editor.
 """
 import re
-from typing import Dict, List, Set, Tuple, Optional, cast
+from typing import Dict, List, Set, Optional
 import logging
 import math
 
 from models.node import Node
-from models.element import BaseElement, Element, Element1D, Element2D, InterfaceElement
+from models.element import BaseElement, Element1D, Element2D, InterfaceElement
 from utils.constants import (
     MATERIAL_START_POS, MATERIAL_END_POS, MATERIAL_FIELD_WIDTH,
     STEP_START_POS, STEP_END_POS, STEP_FIELD_WIDTH
@@ -80,11 +80,13 @@ class CandeModel:
 
         # More general patterns to catch nodes and elements
         # Node pattern - match any line with node ID followed by X and Y coordinates
-        node_pattern = re.compile(r'^\s*C-3\.L3!![ L]+(\d+)\s+\w+\s+(-?[\d\.]+)\s+(-?[\d\.]+)')
+        node_pattern = re.compile(r'^\s*C-3\.L3!![ L]+(\d+)\s+\w+\s+(-?[\d.]+)\s+(-?[\d.]+)')
 
         # Element pattern - more flexible to catch all element types
         # Look for lines that have the C-4.L3!! marker (or similar) and extract all numbers
-        element_pattern = re.compile(r'^\s*C-4\.L3!![ L]+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+(\d+))?')
+        element_pattern = re.compile(
+            r'^\s*C-4\.L3!![ L]+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+(\d+))?'
+        )
 
         for line_num, line in enumerate(self.file_content):
             # Check if this is a node line
@@ -233,11 +235,6 @@ class CandeModel:
                 element_line = self._generate_element_line(element)
                 new_element_lines.append(element_line)
 
-        # Now add interface elements in geometric order
-        for element_id, element in interface_elements:
-            element_line = self._generate_element_line(element)
-            new_element_lines.append(element_line)
-
         # Interface material handling is similar to existing code, but ensures ordering is preserved
         interface_materials = {}  # Maps material_id to (friction, angle)
         interface_material_mapping = {}  # Maps element_id to material_id
@@ -250,8 +247,9 @@ class CandeModel:
             interface_materials[material_id] = (element.friction, element.angle)
             next_material_id += 1
 
-            # Map this element to the material
+            # Map this element to the material and update element immediately
             interface_material_mapping[element_id] = material_id
+            element.material = material_id  # Update material number in memory immediately
 
         # Generate D-1 and D-2 lines for interface materials
         interface_material_lines = []
@@ -277,34 +275,36 @@ class CandeModel:
         for element_id, material_id in interface_material_mapping.items():
             if element_id in self.elements:
                 element = self.elements[element_id]
-                element.material = material_id
+                # Element material is already updated in memory above
 
-                # If the element exists in the file already, update its material number
+                # If the element exists in the file already, update its line content
                 if element.line_number >= 0:
-                    element = self.elements[element_id]
-                    if element.line_number >= 0:  # Only update existing elements in the file
-                        # Update the material field in the file line
-                        line = self.file_content[element.line_number]
+                    # Update the material field in the file line
+                    line = self.file_content[element.line_number]
 
-                        # Right-align material number within the field width
-                        material_str = str(material_id).rjust(MATERIAL_FIELD_WIDTH)
-                        if len(material_str) > MATERIAL_FIELD_WIDTH:
-                            material_str = material_str[-MATERIAL_FIELD_WIDTH:]  # Take only last chars if too long
+                    # Right-align material number within the field width
+                    material_str = str(material_id).rjust(MATERIAL_FIELD_WIDTH)
+                    if len(material_str) > MATERIAL_FIELD_WIDTH:
+                        material_str = material_str[-MATERIAL_FIELD_WIDTH:]  # Take only last chars if too long
 
-                        # Get parts before and after the field we're modifying
-                        prefix = line[:MATERIAL_START_POS] if len(line) > MATERIAL_START_POS else line
-                        suffix = line[MATERIAL_END_POS:] if len(line) > MATERIAL_END_POS else ""
+                    # Get parts before and after the field we're modifying
+                    prefix = line[:MATERIAL_START_POS] if len(line) > MATERIAL_START_POS else line
+                    suffix = line[MATERIAL_END_POS:] if len(line) > MATERIAL_END_POS else ""
 
-                        # Update the line
-                        new_line = prefix + material_str + suffix
-                        new_file_content[element.line_number] = new_line
-                        element.line_content = new_line
+                    # Update the line
+                    new_line = prefix + material_str + suffix
+                    new_file_content[element.line_number] = new_line
+                    element.line_content = new_line
+
+        # Now add interface elements in geometric order (with their updated material numbers)
+        for element_id, element in interface_elements:
+            element_line = self._generate_element_line(element)  # Uses updated element.material
+            new_element_lines.append(element_line)
 
         # Find appropriate insertion points and insert the new content
-        # First, find insertion points for nodes and elements (similar to existing code)
+        # First, find insertion points for nodes and elements
         if new_node_lines or new_element_lines:
-            # Code to insert nodes and elements (keep this part from your existing implementation)
-            # Node handling code...
+            # Code to insert nodes and elements
             last_node_line = -1
             node_pattern = re.compile(r'^\s*C-3\.L3!!L')
 
@@ -353,7 +353,7 @@ class CandeModel:
 
             # 1. Try to find existing "D-1!!" lines
             existing_d1_line = -1
-            existing_d_pattern = re.compile(r'^\s*[D]-\d+.*!!.')  # Match any D line with a character after !!
+            existing_d_pattern = re.compile(r'^\s*D-\d+.*!!.')  # Match any D line with a character after !!
 
             for i, line in enumerate(new_file_content):
                 if "D-1!!" in line:
@@ -401,6 +401,27 @@ class CandeModel:
         except Exception as e:
             logger.error(f"Error saving file: {str(e)}")
             return False
+
+    def element_matches_filter(self, element: BaseElement, element_type_filter: Optional[str]) -> bool:
+        """
+        Check if an element matches the current type filter.
+
+        Args:
+            element: The element to check
+            element_type_filter: The current element type filter ("1D", "2D", "Interface", or None)
+
+        Returns:
+            True if the element matches the filter or if there is no filter
+        """
+        if element_type_filter is None:
+            return True
+        elif element_type_filter == "1D" and isinstance(element, Element1D):
+            return True
+        elif element_type_filter == "2D" and isinstance(element, Element2D):
+            return True
+        elif element_type_filter == "Interface" and isinstance(element, InterfaceElement):
+            return True
+        return False
 
     def select_elements_by_material(self, material, element_type_filter=None) -> int:
         """
