@@ -196,15 +196,16 @@ class CandeModel:
                     match = pattern.match(original_line)
 
                     if match:
-                        # Extract fields that should stay the same
-                        first_part = original_line[:match.start(2)]  # Everything up to first node ID
+                        # Extract element ID (group 1) and everything after the node IDs
+                        element_id = match.group(1)
                         last_part = original_line[match.end(5):]  # Everything after last node ID
 
                         # Get up to 4 node IDs, using 0 for missing nodes
                         node_ids = element.nodes + [0] * (4 - len(element.nodes))
 
-                        # Reconstruct the line with updated node IDs
-                        updated_line = first_part
+                        # Reconstruct the line with properly formatted element ID and node IDs
+                        # This ensures consistent spacing regardless of what was in the original line
+                        updated_line = f"                   C-4.L3!! {int(element_id):4d}"
                         for i, node_id in enumerate(node_ids):
                             updated_line += f"{node_id:5d}"
                         updated_line += last_part
