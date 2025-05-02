@@ -644,11 +644,11 @@ class CandeController:
             self.main_window.show_message("Info", "No model loaded", "info")
             return
 
-        # Check if there's a selection and if it contains any beam elements
+        # Check if there's a selection
         if not self.model.selected_elements:
             self.main_window.show_message(
                 "Info",
-                "No eligible nodes found for interface creation. Try selecting beam elements first.",
+                "No elements selected. Please select beam elements first.",
                 "info"
             )
             return
@@ -681,8 +681,22 @@ class CandeController:
                 "info"
             )
         else:
-            self.main_window.show_message(
-                "Info",
-                "No eligible nodes found for interface creation. Try selecting beam elements first.",
-                "info"
-            )
+            # Check if we have beam elements in the selection
+            has_beam_elements = any(isinstance(self.model.elements.get(element_id), Element1D)
+                                    for element_id in self.model.selected_elements)
+
+            if has_beam_elements:
+                # We have beam elements but couldn't create interfaces
+                # This is likely because they already have interfaces
+                self.main_window.show_message(
+                    "Info",
+                    "No new interfaces created. The selected beam nodes may already have interfaces attached.",
+                    "info"
+                )
+            else:
+                # No beam elements in selection
+                self.main_window.show_message(
+                    "Info",
+                    "No eligible nodes found for interface creation. Try selecting beam elements first.",
+                    "info"
+                )

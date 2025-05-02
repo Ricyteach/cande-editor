@@ -739,35 +739,37 @@ class CandeModel:
         if not beam_elements:
             return 0
 
-        # DIRECT APPROACH: Build a map of beam node coordinates to detect duplicates
-        # This provides a geometry-based way to detect where interfaces exist
-        # Map structure: {(x, y): [(node_id, has_interface)]} - coordinates to list of nodes at those coords
-        coord_to_nodes = {}
-        node_has_interface = set()  # Set of node IDs that have interfaces
+        # Find nodes shared between multiple beam elements and also connected to 2D elements
+        shared_nodes = self._find_shared_beam_nodes()
 
-        # First, build the coordinate mapping for all nodes
-        for node_id, node in self.nodes.items():
-            coords = (node.x, node.y)
-            if coords not in coord_to_nodes:
-                coord_to_nodes[coords] = []
-            coord_to_nodes[coords].append(node_id)
+        # First pass: identify all nodes that could potentially be shared
+        all_shared_nodes = set()
+        for element_id, element in beam_elements.items():
+            for node_id in element.nodes:
+                all_shared_nodes.add(node_id)
 
-        # Now identify interface elements and mark the nodes they use
-        for element_id, element in self.elements.items():
-            if isinstance(element, InterfaceElement) and len(element.nodes) >= 2:
-                # Mark all nodes in this interface
-                for node_id in element.nodes:
-                    if node_id in self.nodes:
-                        node_has_interface.add(node_id)
+        # Filter to only include nodes that are actually shared between beams
+        all_shared_nodes = {node_id for node_id in all_shared_nodes
+                            if sum(1 for element in beam_elements.values()
+                                   if node_id in element.nodes) > 1}
 
-                        # Also check if there are other nodes at the same coordinates
-                        node = self.nodes[node_id]
-                        coords = (node.x, node.y)
-                        for other_node_id in coord_to_nodes.get(coords, []):
-                            if other_node_id != node_id:
-                                # This handles the case where we have multiple nodes at the same location
-                                # that make up an interface - mark them all
-                                node_has_interface.add(other_node_id)
+        logger.info(f"Found {len(all_shared_nodes)} total shared nodes between beam elements")
+        logger.info(f"Found {len(shared_nodes)} eligible shared nodes for interfaces")
+
+        # Check if we have any eligible nodes
+        if not shared_nodes:
+            if all_shared_nodes:
+                # We found shared nodes, but they all have interfaces already
+                logger.info("All shared nodes already have interfaces attached")
+                return 0  # Return 0 to indicate no interfaces were created
+            elif beam_elements:
+                # We have beam elements, but no shared nodes were found
+                logger.info("No shared nodes found in the selected beam elements")
+                return 0
+            else:
+                # No beam elements selected
+                logger.info("No beam elements found in the selection")
+                return 0
 
         # Calculate angles
         node_angles = self._calculate_beam_angles(beam_elements)
@@ -787,25 +789,13 @@ class CandeModel:
                 continue
 
             # Extract the shared nodes from the chain
-            shared_nodes = self._extract_shared_nodes_from_chain(chain, beam_elements)
+            chain_shared_nodes = self._extract_shared_nodes_from_chain(chain, beam_elements)
+
+            # Filter to only include nodes that are eligible for interfaces
+            chain_shared_nodes = [node_id for node_id in chain_shared_nodes if node_id in shared_nodes]
 
             # For each shared node in the chain (in geometric order)
-            for node_id in shared_nodes:
-                # NEW APPROACH: Check if this node or any node at the same coordinates has an interface
-                node = self.nodes[node_id]
-                coords = (node.x, node.y)
-
-                # Check if this node or any coincident node already has an interface
-                has_existing_interface = node_id in node_has_interface
-                for coincident_node_id in coord_to_nodes.get(coords, []):
-                    if coincident_node_id in node_has_interface:
-                        has_existing_interface = True
-                        break
-
-                if has_existing_interface:
-                    logger.info(f"Skipping node {node_id} at {coords} as it already has an interface")
-                    continue
-
+            for node_id in chain_shared_nodes:
                 # Create new I (inside) node
                 i_node_id = max_node_id + 1
                 max_node_id += 1
@@ -837,10 +827,6 @@ class CandeModel:
                     line_content=""
                 )
 
-                # Update coordinate map with the new nodes
-                coords = (original_node.x, original_node.y)
-                coord_to_nodes[coords].extend([i_node_id, k_node_id])
-
                 # Get the angle for this node (with default value of 0.0 if not found)
                 angle = node_angles.get(node_id, 0.0)
 
@@ -859,45 +845,71 @@ class CandeModel:
                     line_content=""
                 )
 
-                # Mark all these nodes as having interfaces now
-                for new_node_id in [i_node_id, j_node_id, k_node_id]:
-                    node_has_interface.add(new_node_id)
-
                 interface_count += 1
 
                 # Update beam elements to use the new I node instead of original
                 # ONLY UPDATE BEAM ELEMENTS IN THE SELECTION
                 self._update_beam_elements_for_interface(node_id, i_node_id, beam_elements.keys())
 
-                # Add verbose debugging info to help diagnose further issues
-                logger.info(f"Created interface element {interface_element_id} at node {node_id}")
-                logger.info(f"Created nodes: I={i_node_id}, J={j_node_id} (original), K={k_node_id}")
-
-        # Final verification - check if we have any duplicate interfaces
-        if interface_count > 0:
-            interface_coords = {}
-            duplicates = 0
-
-            for element_id, element in self.elements.items():
-                if isinstance(element, InterfaceElement) and len(element.nodes) >= 2:
-                    if all(node_id in self.nodes for node_id in element.nodes[:2]):
-                        i_node = self.nodes[element.nodes[0]]
-                        j_node = self.nodes[element.nodes[1]]
-
-                        # Use coordinates as a key
-                        coords = (i_node.x, i_node.y, j_node.x, j_node.y)
-
-                        if coords in interface_coords:
-                            duplicates += 1
-                            logger.warning(
-                                f"Potential duplicate interface at {coords}: elements {interface_coords[coords]} and {element_id}")
-                        else:
-                            interface_coords[coords] = element_id
-
-            if duplicates > 0:
-                logger.warning(f"Found {duplicates} potential duplicate interfaces after creation")
-
         return interface_count
+
+    def _find_shared_beam_nodes(self, beam_collection=None) -> Set[int]:
+        """
+        Find nodes that are shared between multiple beam elements and also connected to 2D elements,
+        excluding nodes that already have interface elements.
+
+        Args:
+            beam_collection: Optional dictionary of beam elements to consider, if None uses all beams
+
+        Returns:
+            Set of node IDs that are eligible for interface creation
+        """
+        # Track nodes used by beam elements
+        beam_nodes = {}
+
+        # If no specific collection provided, use all beam elements
+        if beam_collection is None:
+            beam_elements = {
+                element_id: element for element_id, element in self.elements.items()
+                if isinstance(element, Element1D)
+            }
+        else:
+            beam_elements = beam_collection
+
+        # Track nodes used by 2D elements
+        element2d_nodes = set()
+
+        # Track nodes used by interface elements
+        interface_nodes = set()
+
+        # Collect nodes by element type
+        for element_id, element in self.elements.items():
+            if isinstance(element, Element1D):
+                # For beam elements, count the occurrences of each node
+                for node_id in element.nodes:
+                    beam_nodes[node_id] = beam_nodes.get(node_id, 0) + 1
+            elif isinstance(element, Element2D):
+                # For 2D elements, just track which nodes are used
+                element2d_nodes.update(element.nodes)
+            elif isinstance(element, InterfaceElement):
+                # For interface elements, track the nodes they use
+                interface_nodes.update(element.nodes)
+
+        # Find nodes that are used by multiple beam elements AND by at least one 2D element
+        # AND are not already used by an interface element
+        shared_nodes = {
+            node_id for node_id, count in beam_nodes.items()
+            if count >= 2 and node_id in element2d_nodes and node_id not in interface_nodes
+        }
+
+        # Log what we found for debugging
+        logger.info(f"Found {len(beam_nodes)} nodes used by beam elements")
+        logger.info(f"Found {len(element2d_nodes)} nodes used by 2D elements")
+        logger.info(f"Found {len(interface_nodes)} nodes used by interface elements")
+        logger.info(
+            f"Found {len(shared_nodes)} nodes shared between beam elements and 2D elements that don't have interfaces")
+
+        return shared_nodes
 
     def _update_beam_elements_for_interface(self, old_node_id: int, new_node_id: int,
                                             element_ids_to_update=None) -> None:
@@ -1192,61 +1204,6 @@ class CandeModel:
 
         # Extract only the shared nodes (those appearing at the junction between beams)
         shared_nodes = chain_nodes[1:-1]
-
-        return shared_nodes
-
-    def _find_shared_beam_nodes(self, beam_collection=None) -> Set[int]:
-        """
-        Find nodes that are shared between multiple beam elements and also connected to 2D elements.
-
-        Args:
-            beam_collection: Optional dictionary of beam elements to consider, if None uses all beams
-
-        Returns:
-            Set of node IDs that are eligible for interface creation
-        """
-        # Track nodes used by beam elements
-        beam_nodes = {}
-
-        # If no specific collection provided, use all beam elements
-        if beam_collection is None:
-            beam_elements = {
-                element_id: element for element_id, element in self.elements.items()
-                if isinstance(element, Element1D)
-            }
-        else:
-            beam_elements = beam_collection
-
-        # Track nodes used by 2D elements
-        element2d_nodes = set()
-        # Track nodes used by interface elements
-        interface_nodes = set()
-
-        # Collect nodes by element type
-        for element_id, element in self.elements.items():
-            if element_id in beam_elements:
-                # For SELECTED beam elements, count the occurrences of each node
-                for node_id in element.nodes:
-                    beam_nodes[node_id] = beam_nodes.get(node_id, 0) + 1
-            elif isinstance(element, Element2D):
-                # For 2D elements, just track which nodes are used
-                element2d_nodes.update(element.nodes)
-            elif isinstance(element, InterfaceElement):
-                # For interface elements, track the nodes they use
-                interface_nodes.update(element.nodes)
-
-        # Find nodes that are used by multiple beam elements AND by at least one 2D element
-        # AND are not already used by an interface element
-        shared_nodes = {
-            node_id for node_id, count in beam_nodes.items()
-            if count >= 2 and node_id in element2d_nodes and node_id not in interface_nodes
-        }
-
-        # Log what we found for debugging
-        logger.info(f"Found {len(beam_nodes)} nodes used by selected beam elements")
-        logger.info(f"Found {len(element2d_nodes)} nodes used by 2D elements")
-        logger.info(f"Found {len(interface_nodes)} nodes used by interface elements")
-        logger.info(f"Found {len(shared_nodes)} nodes shared between selected beam elements and 2D elements")
 
         return shared_nodes
 
