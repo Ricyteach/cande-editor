@@ -2,7 +2,7 @@
 Main model class for CANDE Input File Editor.
 """
 import re
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Set, Optional, Tuple
 import logging
 import math
 
@@ -710,7 +710,7 @@ class CandeModel:
 
         return updated_count
 
-    def create_interfaces(self, selected_elements: Set[int] = None, friction: float = 0.3) -> int:
+    def create_interfaces(self, selected_elements: Set[int] = None, friction: float = 0.3) -> Tuple[int, bool]:
         """
         Automatically creates interface elements between beam elements and 2D elements,
         avoiding creating duplicates where interfaces already exist.
@@ -720,14 +720,14 @@ class CandeModel:
             friction: Friction coefficient for the interface elements
 
         Returns:
-            Number of interface elements created
+            Tuple of (number of interface elements created, all_nodes_have_interfaces flag)
         """
         if not self.nodes or not self.elements:
-            return 0
+            return 0, False
 
         # Require a selection
         if selected_elements is None or len(selected_elements) == 0:
-            return 0
+            return 0, False
 
         # Find beam elements FROM THE SELECTION
         beam_elements = {
@@ -737,7 +737,7 @@ class CandeModel:
 
         # Only proceed if we have beam elements
         if not beam_elements:
-            return 0
+            return 0, False
 
         # Find nodes shared between multiple beam elements and also connected to 2D elements
         shared_nodes = self._find_shared_beam_nodes()
@@ -761,15 +761,15 @@ class CandeModel:
             if all_shared_nodes:
                 # We found shared nodes, but they all have interfaces already
                 logger.info("All shared nodes already have interfaces attached")
-                return 0  # Return 0 to indicate no interfaces were created
+                return 0, True  # Return 0 and True to indicate no interfaces were created but all nodes have interfaces
             elif beam_elements:
                 # We have beam elements, but no shared nodes were found
                 logger.info("No shared nodes found in the selected beam elements")
-                return 0
+                return 0, False
             else:
                 # No beam elements selected
                 logger.info("No beam elements found in the selection")
-                return 0
+                return 0, False
 
         # Calculate angles
         node_angles = self._calculate_beam_angles(beam_elements)
@@ -851,7 +851,8 @@ class CandeModel:
                 # ONLY UPDATE BEAM ELEMENTS IN THE SELECTION
                 self._update_beam_elements_for_interface(node_id, i_node_id, beam_elements.keys())
 
-        return interface_count
+        # At the end, return the count of created interfaces and False since some nodes were eligible
+        return interface_count, False
 
     def _find_shared_beam_nodes(self, beam_collection=None) -> Set[int]:
         """

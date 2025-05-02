@@ -2,11 +2,12 @@
 Main controller for CANDE Input File Editor.
 """
 import tkinter as tk
-from typing import Dict, Set, Optional, Tuple, Any, cast
+from typing import Set, Any
 from enum import Enum, auto
 import logging
 
 from models.cande_model import CandeModel
+from models.element import Element1D
 from views.main_window import MainWindow
 from views.canvas_view import CanvasView, DisplayMode
 from utils.constants import LINE_ELEMENT_WIDTH
@@ -670,7 +671,7 @@ class CandeController:
             return
 
         # Create interface elements with the specified friction value
-        count = self.model.create_interfaces(self.model.selected_elements, friction)
+        count, all_nodes_have_interfaces = self.model.create_interfaces(self.model.selected_elements, friction)
 
         if count > 0:
             self.render_mesh()
@@ -681,22 +682,30 @@ class CandeController:
                 "info"
             )
         else:
-            # Check if we have beam elements in the selection
-            has_beam_elements = any(isinstance(self.model.elements.get(element_id), Element1D)
-                                    for element_id in self.model.selected_elements)
-
-            if has_beam_elements:
-                # We have beam elements but couldn't create interfaces
-                # This is likely because they already have interfaces
+            # Check if all nodes already have interfaces
+            if all_nodes_have_interfaces:
+                # This is the case we need to handle specifically
                 self.main_window.show_message(
                     "Info",
-                    "No new interfaces created. The selected beam nodes may already have interfaces attached.",
+                    "No new interfaces created. All shared nodes in the selection already have interfaces attached.",
                     "info"
                 )
             else:
-                # No beam elements in selection
-                self.main_window.show_message(
-                    "Info",
-                    "No eligible nodes found for interface creation. Try selecting beam elements first.",
-                    "info"
-                )
+                # Check if we have beam elements in the selection
+                has_beam_elements = any(isinstance(self.model.elements.get(element_id), Element1D)
+                                        for element_id in self.model.selected_elements)
+
+                if has_beam_elements:
+                    # We have beam elements but couldn't create interfaces for other reasons
+                    self.main_window.show_message(
+                        "Info",
+                        "No interfaces created. The selected beam elements don't share any nodes or don't connect to 2D elements.",
+                        "info"
+                    )
+                else:
+                    # No beam elements in selection
+                    self.main_window.show_message(
+                        "Info",
+                        "No eligible nodes found for interface creation. Try selecting beam elements first.",
+                        "info"
+                    )
