@@ -165,13 +165,16 @@ class CandeController:
         # Get the current line width value from the UI
         current_line_width = self.main_window.line_width_var.get()
 
+        # Pass model reference to the canvas view for consistent interface coloring
+        self.canvas_view.model = self.model
+
         self.canvas_view.render_mesh(
             self.model.nodes,
             self.model.elements,
             self.model.selected_elements,
             self.model.max_material,
             self.model.max_step,
-            self.element_type_filter,  # Pass the list of element types to filter
+            self.element_type_filter,
             current_line_width
         )
 

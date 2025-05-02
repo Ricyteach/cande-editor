@@ -394,6 +394,9 @@ class CandeModel:
                 for i, line in enumerate(interface_material_lines):
                     new_file_content.insert(insertion_index + 1 + i, line)
 
+        # Update the C-2 line with current counts before saving
+        new_file_content = self._update_c2_line(new_file_content)
+
         # Save the modified content
         try:
             with open(save_path, 'w') as file:
@@ -402,6 +405,140 @@ class CandeModel:
         except Exception as e:
             logger.error(f"Error saving file: {str(e)}")
             return False
+
+    def _update_c2_line(self, file_content: List[str]) -> List[str]:
+        """
+        Update the C-2 line with current counts of nodes, elements, and materials.
+
+        Args:
+            file_content: The current file content
+
+        Returns:
+            Updated file content with modified C-2 line
+        """
+        # First, find the C-1 line
+        c1_index = -1
+        for i, line in enumerate(file_content):
+            if "C-1.L3!!" in line:
+                c1_index = i
+                break
+
+        if c1_index == -1 or c1_index + 1 >= len(file_content):
+            # Could not find C-1 line or there's no line after it
+            return file_content
+
+        # Get the C-2 line (immediately after C-1)
+        c2_index = c1_index + 1
+        c2_line = file_content[c2_index]
+
+        # Check if this is actually a C-2 line
+        if "C-2.L3!!" not in c2_line:
+            logger.warning(f"Expected C-2 line after C-1, found: {c2_line}")
+            return file_content
+
+        # Find the position right after "C-2.L3!!"
+        prefix_match = re.search(r'C-2\.L3!!', c2_line)
+        if not prefix_match:
+            logger.warning(f"Could not identify C-2.L3!! marker in line: {c2_line}")
+            return file_content
+
+        prefix_end = prefix_match.end()
+        prefix = c2_line[:prefix_end]
+
+        # Extract fields with fixed width of 5 chars each
+        remaining = c2_line[prefix_end:]
+        field_width = 5
+        fields = []
+
+        # Extract as many 5-character fields as possible
+        for i in range(0, len(remaining), field_width):
+            if i + field_width <= len(remaining):
+                field = remaining[i:i + field_width].strip()
+                if field.isdigit():
+                    fields.append(int(field))
+                else:
+                    fields.append(field)
+
+        # We need at least 10 numeric fields (0-9)
+        if len(fields) < 10:
+            logger.warning(f"Not enough fields in C-2 line: {c2_line}")
+            return file_content
+
+        # Update the fields according to requirements
+        # 0: max load steps
+        max_step = max((element.step for element in self.elements.values()), default=1)
+        fields[0] = max(fields[0], max_step)
+
+        # 5: total number of nodes
+        fields[5] = len(self.nodes)
+
+        # 6: total number of elements
+        fields[6] = len(self.elements)
+
+        # 8: total number of soil materials
+        soil_materials = max(
+            (element.material for element_id, element in self.elements.items()
+             if not isinstance(element, InterfaceElement)),
+            default=0
+        )
+        fields[8] = max(fields[8], soil_materials)
+
+        # 9: total number of interface materials
+        interface_materials = max(
+            (element.material for element_id, element in self.elements.items()
+             if isinstance(element, InterfaceElement)),
+            default=0
+        )
+        fields[9] = max(fields[9], interface_materials)
+
+        # Reconstruct the C-2 line
+        new_c2_line = prefix
+
+        # Add each field with proper spacing (5 chars each, right-aligned)
+        for field in fields:
+            if isinstance(field, int):
+                new_c2_line += f"{field:5d}"
+            else:
+                new_c2_line += f"{field:5s}"
+
+        # CRITICAL: Preserve line ending
+        # Check if the original line has a newline character
+        if c2_line.endswith('\n'):
+            new_c2_line += '\n'
+        elif c2_line.endswith('\r\n'):
+            new_c2_line += '\r\n'
+
+        # Update the line in the file content
+        file_content[c2_index] = new_c2_line
+
+        return file_content
+
+    # In CandeModel class, add a method to get color index for friction value
+
+    def get_friction_color_index(self, friction: float) -> int:
+        """
+        Get a consistent color index for a friction value.
+
+        Args:
+            friction: The friction coefficient value
+
+        Returns:
+            An index into the CANDE_COLORS list
+        """
+        # Initialize friction color map if it doesn't exist
+        if not hasattr(self, 'friction_color_map'):
+            self.friction_color_map = {}
+
+        # Round friction to 2 decimal places for consistent grouping
+        rounded_friction = round(friction, 2)
+
+        # If this friction value isn't in our map yet, add it
+        if rounded_friction not in self.friction_color_map:
+            # Assign the next available color index
+            self.friction_color_map[rounded_friction] = len(self.friction_color_map)
+
+        # Return the color index
+        return self.friction_color_map[rounded_friction]
 
     def element_matches_filter(self, element: BaseElement, element_type_filter: Optional[str]) -> bool:
         """

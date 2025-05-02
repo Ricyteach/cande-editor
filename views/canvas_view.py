@@ -115,7 +115,22 @@ class CanvasView:
                     # Draw selection indicators at each end point
                     self._draw_selection_indicator(screen_coords[0][0], screen_coords[0][1])
                     self._draw_selection_indicator(screen_coords[1][0], screen_coords[1][1])
+                    # In the CanvasView.render_mesh method, for interface elements:
+
             elif isinstance(element, InterfaceElement) and len(element.nodes) >= 2:
+                # For interface elements, use consistent colors based on friction
+                friction = getattr(element, 'friction', 0.3)
+
+                # Get color index from model
+                # We need a reference to the model, which we should pass to render_mesh
+                if hasattr(self, 'model'):
+                    color_index = self.model.get_friction_color_index(friction)
+                else:
+                    # Fallback if model reference is not available
+                    color_index = int(friction * 10) % len(CANDE_COLORS)
+
+                fill_color = CANDE_COLORS[color_index]
+
                 # For interface elements, draw a diamond shape
                 # Get coordinates for interface element nodes (only need first two nodes for placement)
                 screen_coords = []
@@ -148,31 +163,55 @@ class CanvasView:
 
                 # After drawing the interface diamond:
                 if isinstance(element, InterfaceElement):
-                    # Draw angle indicator with a longer line
+                    # Draw improved angle indicator with a longer line and better arrow
                     indicator_length = 20  # Make this longer to be more visible
                     angle_rad = math.radians(element.angle)
+
+                    # Calculate arrow endpoint
                     indicator_x = avg_x + indicator_length * math.cos(angle_rad)
                     # Flip the y direction since canvas has y increasing downward
                     indicator_y = avg_y - indicator_length * math.sin(angle_rad)
 
-                    # Create a more visible arrow
+                    # Draw the main arrow line
                     self.canvas.create_line(
                         avg_x, avg_y, indicator_x, indicator_y,
-                        fill="red",  # Bright color
-                        width=2,  # Thicker line
-                        arrow=tk.LAST,
+                        fill="red",  # Use a bright color
+                        width=2,  # Make the line thicker
+                        arrow=tk.LAST,  # Add arrowhead at the end
+                        arrowshape=(10, 12, 5),  # Customize arrowhead shape (dx, dy, z)
                         tags=(f"angle_indicator_{element_id}",)
                     )
 
-                    # Add a small text label showing the angle value
-                    text_x = avg_x + (indicator_length + 5) * math.cos(angle_rad)
-                    text_y = avg_y + (indicator_length + 5) * math.sin(angle_rad)
+                    # Add a small text label showing the angle value and friction
+                    # Position the text offset from the arrow to avoid overlap
+                    offset_factor = 1.3
+                    text_x = avg_x + (indicator_length * offset_factor) * math.cos(angle_rad)
+                    text_y = avg_y - (indicator_length * offset_factor) * math.sin(angle_rad)
+
                     self.canvas.create_text(
                         text_x, text_y,
                         text=f"{element.angle:.0f}°",
                         fill="blue",
-                        font=("Arial", 8),
+                        font=("Arial", 8, "bold"),  # Make font bold for better visibility
                         tags=(f"angle_text_{element_id}",)
+                    )
+
+                    # Add a perpendicular tick mark to indicate the interface plane
+                    perp_length = 10
+                    perp_angle_rad = angle_rad + math.pi / 2  # Perpendicular to force direction
+
+                    perp1_x = avg_x + perp_length * math.cos(perp_angle_rad)
+                    perp1_y = avg_y - perp_length * math.sin(perp_angle_rad)
+                    perp2_x = avg_x - perp_length * math.cos(perp_angle_rad)
+                    perp2_y = avg_y + perp_length * math.sin(perp_angle_rad)
+
+                    # Draw the interface plane indicator line
+                    self.canvas.create_line(
+                        perp1_x, perp1_y, perp2_x, perp2_y,
+                        fill="green",  # Different color for interface plane
+                        width=2,
+                        dash=(3, 2),  # Dashed line
+                        tags=(f"plane_indicator_{element_id}",)
                     )
 
                 # Draw a selection indicator if the element is selected
