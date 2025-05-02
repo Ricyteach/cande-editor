@@ -712,7 +712,8 @@ class CandeModel:
 
     def create_interfaces(self, selected_elements: Set[int] = None, friction: float = 0.3) -> int:
         """
-        Automatically creates interface elements between beam elements and 2D elements.
+        Automatically creates interface elements between beam elements and 2D elements,
+        avoiding creating duplicates where interfaces already exist.
 
         Args:
             selected_elements: The elements for which to apply the operation (required)
@@ -738,10 +739,40 @@ class CandeModel:
         if not beam_elements:
             return 0
 
+        # DIRECT APPROACH: Build a map of beam node coordinates to detect duplicates
+        # This provides a geometry-based way to detect where interfaces exist
+        # Map structure: {(x, y): [(node_id, has_interface)]} - coordinates to list of nodes at those coords
+        coord_to_nodes = {}
+        node_has_interface = set()  # Set of node IDs that have interfaces
+
+        # First, build the coordinate mapping for all nodes
+        for node_id, node in self.nodes.items():
+            coords = (node.x, node.y)
+            if coords not in coord_to_nodes:
+                coord_to_nodes[coords] = []
+            coord_to_nodes[coords].append(node_id)
+
+        # Now identify interface elements and mark the nodes they use
+        for element_id, element in self.elements.items():
+            if isinstance(element, InterfaceElement) and len(element.nodes) >= 2:
+                # Mark all nodes in this interface
+                for node_id in element.nodes:
+                    if node_id in self.nodes:
+                        node_has_interface.add(node_id)
+
+                        # Also check if there are other nodes at the same coordinates
+                        node = self.nodes[node_id]
+                        coords = (node.x, node.y)
+                        for other_node_id in coord_to_nodes.get(coords, []):
+                            if other_node_id != node_id:
+                                # This handles the case where we have multiple nodes at the same location
+                                # that make up an interface - mark them all
+                                node_has_interface.add(other_node_id)
+
         # Calculate angles
         node_angles = self._calculate_beam_angles(beam_elements)
 
-        # NEW PART: Find connected beam chains to preserve geometric ordering
+        # Find connected beam chains to preserve geometric ordering
         beam_chains = self._find_beam_chains(beam_elements)
 
         # Track new nodes and elements created
@@ -760,6 +791,21 @@ class CandeModel:
 
             # For each shared node in the chain (in geometric order)
             for node_id in shared_nodes:
+                # NEW APPROACH: Check if this node or any node at the same coordinates has an interface
+                node = self.nodes[node_id]
+                coords = (node.x, node.y)
+
+                # Check if this node or any coincident node already has an interface
+                has_existing_interface = node_id in node_has_interface
+                for coincident_node_id in coord_to_nodes.get(coords, []):
+                    if coincident_node_id in node_has_interface:
+                        has_existing_interface = True
+                        break
+
+                if has_existing_interface:
+                    logger.info(f"Skipping node {node_id} at {coords} as it already has an interface")
+                    continue
+
                 # Create new I (inside) node
                 i_node_id = max_node_id + 1
                 max_node_id += 1
@@ -791,6 +837,10 @@ class CandeModel:
                     line_content=""
                 )
 
+                # Update coordinate map with the new nodes
+                coords = (original_node.x, original_node.y)
+                coord_to_nodes[coords].extend([i_node_id, k_node_id])
+
                 # Get the angle for this node (with default value of 0.0 if not found)
                 angle = node_angles.get(node_id, 0.0)
 
@@ -809,13 +859,217 @@ class CandeModel:
                     line_content=""
                 )
 
+                # Mark all these nodes as having interfaces now
+                for new_node_id in [i_node_id, j_node_id, k_node_id]:
+                    node_has_interface.add(new_node_id)
+
                 interface_count += 1
 
                 # Update beam elements to use the new I node instead of original
                 # ONLY UPDATE BEAM ELEMENTS IN THE SELECTION
                 self._update_beam_elements_for_interface(node_id, i_node_id, beam_elements.keys())
 
+                # Add verbose debugging info to help diagnose further issues
+                logger.info(f"Created interface element {interface_element_id} at node {node_id}")
+                logger.info(f"Created nodes: I={i_node_id}, J={j_node_id} (original), K={k_node_id}")
+
+        # Final verification - check if we have any duplicate interfaces
+        if interface_count > 0:
+            interface_coords = {}
+            duplicates = 0
+
+            for element_id, element in self.elements.items():
+                if isinstance(element, InterfaceElement) and len(element.nodes) >= 2:
+                    if all(node_id in self.nodes for node_id in element.nodes[:2]):
+                        i_node = self.nodes[element.nodes[0]]
+                        j_node = self.nodes[element.nodes[1]]
+
+                        # Use coordinates as a key
+                        coords = (i_node.x, i_node.y, j_node.x, j_node.y)
+
+                        if coords in interface_coords:
+                            duplicates += 1
+                            logger.warning(
+                                f"Potential duplicate interface at {coords}: elements {interface_coords[coords]} and {element_id}")
+                        else:
+                            interface_coords[coords] = element_id
+
+            if duplicates > 0:
+                logger.warning(f"Found {duplicates} potential duplicate interfaces after creation")
+
         return interface_count
+
+    def _update_beam_elements_for_interface(self, old_node_id: int, new_node_id: int,
+                                            element_ids_to_update=None) -> None:
+        """
+        Update beam elements to use the new inside node instead of the original shared node.
+        Enhanced version with better logging and validation.
+
+        Args:
+            old_node_id: Original node ID
+            new_node_id: New inside node ID
+            element_ids_to_update: Optional set of element IDs to update, if None updates all Elements
+        """
+        updated_count = 0
+        updated_elements = []
+
+        for element_id, element in self.elements.items():
+            # Skip if not in the selection (if a selection is provided)
+            if element_ids_to_update is not None and element_id not in element_ids_to_update:
+                continue
+
+            if isinstance(element, Element1D):
+                # Check if the element uses the old node
+                if old_node_id in element.nodes:
+                    # Track previous state for logging
+                    old_nodes = list(element.nodes)
+
+                    # Replace the old node with the new one
+                    new_nodes = [new_node_id if n == old_node_id else n for n in element.nodes]
+                    element.nodes = new_nodes
+                    updated_count += 1
+                    updated_elements.append(element_id)
+
+                    logger.info(f"Updated beam element {element_id}: replaced node {old_node_id} with {new_node_id}")
+
+                    # If this is an existing element in the file, update its line_content
+                    if element.line_number >= 0 and element.line_number < len(self.file_content):
+                        original_line = self.file_content[element.line_number]
+
+                        # Use regex to find the node IDs in the line
+                        pattern = re.compile(
+                            r'^\s*C-4\.L3!![ L]+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+(\d+))?')
+                        match = pattern.match(original_line)
+
+                        if match:
+                            # Extract parts before and after the node IDs
+                            first_part = original_line[:match.start(2)]  # Everything up to first node ID
+                            last_part = original_line[match.end(5):]  # Everything after last node ID
+
+                            # Get up to 4 node IDs, using 0 for missing nodes
+                            node_ids = element.nodes + [0] * (4 - len(element.nodes))
+
+                            # Reconstruct the line with updated node IDs
+                            updated_line = first_part
+                            for i, node_id in enumerate(node_ids):
+                                updated_line += f"{node_id:5d}"
+                            updated_line += last_part
+
+                            # Update the line content in the element
+                            element.line_content = updated_line
+
+        logger.info(f"Updated {updated_count} beam elements to use new node {new_node_id}")
+        if updated_elements:
+            logger.info(f"Updated elements: {updated_elements}")
+
+        # Verify none of the updated elements still use the old node
+        verification_failed = []
+        for element_id in updated_elements:
+            element = self.elements[element_id]
+            if old_node_id in element.nodes:
+                verification_failed.append(element_id)
+
+        if verification_failed:
+            logger.error(f"Verification failed! Elements still using old node {old_node_id}: {verification_failed}")
+
+    # Add this debugging method to help diagnose interface issues
+    def dump_interface_info(self, filename="interface_debug.txt"):
+        """
+        Dumps detailed information about all interface elements to a file
+        for debugging purposes.
+        """
+        try:
+            with open(filename, 'w') as f:
+                f.write("=== INTERFACE ELEMENT DEBUG INFO ===\n\n")
+
+                # Track nodes with interfaces
+                nodes_with_interfaces = set()
+
+                # Find interface elements
+                interface_elements = {}
+                for element_id, element in self.elements.items():
+                    if isinstance(element, InterfaceElement):
+                        interface_elements[element_id] = element
+
+                        # Track nodes used by interfaces
+                        nodes_with_interfaces.update(element.nodes)
+
+                f.write(f"Total interface elements: {len(interface_elements)}\n")
+                f.write(f"Total nodes used by interfaces: {len(nodes_with_interfaces)}\n\n")
+
+                # Group interfaces by coordinates
+                coords_to_interfaces = {}
+                for element_id, element in interface_elements.items():
+                    if len(element.nodes) >= 2 and all(n in self.nodes for n in element.nodes[:2]):
+                        i_node = self.nodes[element.nodes[0]]
+                        j_node = self.nodes[element.nodes[1]]
+                        coords = (i_node.x, i_node.y)
+
+                        if coords not in coords_to_interfaces:
+                            coords_to_interfaces[coords] = []
+                        coords_to_interfaces[coords].append(element_id)
+
+                # Report on interface distribution
+                f.write("=== INTERFACE DISTRIBUTION BY COORDINATES ===\n")
+                for coords, elements in coords_to_interfaces.items():
+                    f.write(f"Coordinates {coords}: {len(elements)} interfaces\n")
+                    if len(elements) > 1:
+                        f.write(f"  Elements: {elements}\n")
+
+                f.write("\n=== DETAILED INTERFACE ELEMENTS ===\n")
+                for element_id, element in sorted(interface_elements.items()):
+                    f.write(f"\nInterface Element {element_id}:\n")
+                    f.write(f"  Nodes: {element.nodes}\n")
+                    f.write(f"  Material: {element.material}\n")
+                    f.write(f"  Step: {element.step}\n")
+                    f.write(f"  Friction: {getattr(element, 'friction', 'N/A')}\n")
+                    f.write(f"  Angle: {getattr(element, 'angle', 'N/A')}\n")
+
+                    # Add node coordinates
+                    f.write("  Node coordinates:\n")
+                    for node_id in element.nodes:
+                        if node_id in self.nodes:
+                            node = self.nodes[node_id]
+                            f.write(f"    Node {node_id}: ({node.x}, {node.y})\n")
+                        else:
+                            f.write(f"    Node {node_id}: NOT FOUND\n")
+
+                # Add verification for beam elements
+                f.write("\n=== BEAM ELEMENT VERIFICATION ===\n")
+                beam_elements = {id: e for id, e in self.elements.items() if isinstance(e, Element1D)}
+                f.write(f"Total beam elements: {len(beam_elements)}\n")
+
+                # Check for shared nodes
+                node_to_beams = {}
+                for element_id, element in beam_elements.items():
+                    for node_id in element.nodes:
+                        if node_id not in node_to_beams:
+                            node_to_beams[node_id] = []
+                        node_to_beams[node_id].append(element_id)
+
+                shared_nodes = {n: beams for n, beams in node_to_beams.items() if len(beams) > 1}
+                f.write(f"Shared nodes (used by multiple beams): {len(shared_nodes)}\n")
+
+                for node_id, beam_ids in shared_nodes.items():
+                    f.write(f"  Node {node_id} used by beams: {beam_ids}\n")
+                    if node_id in nodes_with_interfaces:
+                        f.write(f"    This node has interface(s)\n")
+
+                        # Find interface elements using this node
+                        interfaces_using_node = []
+                        for element_id, element in interface_elements.items():
+                            if node_id in element.nodes:
+                                interfaces_using_node.append(element_id)
+
+                        if interfaces_using_node:
+                            f.write(f"    Used by interface elements: {interfaces_using_node}\n")
+
+                f.write("\n=== END OF DEBUG INFO ===\n")
+
+                return True
+        except Exception as e:
+            logger.error(f"Error dumping interface debug info: {e}")
+            return False
 
     def _find_beam_chains(self, beam_elements: Dict[int, Element1D]) -> List[List[int]]:
         """
@@ -995,54 +1249,6 @@ class CandeModel:
         logger.info(f"Found {len(shared_nodes)} nodes shared between selected beam elements and 2D elements")
 
         return shared_nodes
-
-    def _update_beam_elements_for_interface(self, old_node_id: int, new_node_id: int,
-                                            element_ids_to_update=None) -> None:
-        """
-        Update beam elements to use the new inside node instead of the original shared node.
-
-        Args:
-            old_node_id: Original node ID
-            new_node_id: New inside node ID
-            element_ids_to_update: Optional set of element IDs to update, if None updates all Elements
-        """
-        for element_id, element in self.elements.items():
-            # Skip if not in the selection (if a selection is provided)
-            if element_ids_to_update is not None and element_id not in element_ids_to_update:
-                continue
-
-            if isinstance(element, Element1D):
-                # Check if the element uses the old node
-                if old_node_id in element.nodes:
-                    # Replace the old node with the new one
-                    new_nodes = [new_node_id if n == old_node_id else n for n in element.nodes]
-                    element.nodes = new_nodes
-
-                    # If this is an existing element in the file, update its line_content
-                    if element.line_number >= 0 and element.line_number < len(self.file_content):
-                        original_line = self.file_content[element.line_number]
-
-                        # Use regex to find the node IDs in the line
-                        pattern = re.compile(
-                            r'^\s*C-4\.L3!![ L]+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+(\d+))?')
-                        match = pattern.match(original_line)
-
-                        if match:
-                            # Extract parts before and after the node IDs
-                            first_part = original_line[:match.start(2)]  # Everything up to first node ID
-                            last_part = original_line[match.end(5):]  # Everything after last node ID
-
-                            # Get up to 4 node IDs, using 0 for missing nodes
-                            node_ids = element.nodes + [0] * (4 - len(element.nodes))
-
-                            # Reconstruct the line with updated node IDs
-                            updated_line = first_part
-                            for i, node_id in enumerate(node_ids):
-                                updated_line += f"{node_id:5d}"
-                            updated_line += last_part
-
-                            # Update the line content in the element
-                            element.line_content = updated_line
 
     def _calculate_beam_angles(self, beam_collection: Dict[int, Element1D]) -> Dict[int, float]:
         """
