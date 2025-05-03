@@ -305,12 +305,29 @@ class CandeController:
                 )
                 return
 
-            # Only update elements that match the current element type filter
+            # IMPORTANT: Filter out interface elements from the selection
+            # Interface elements have properties managed automatically by the interface creation routine
+            # and should not be manually modified to avoid breaking the simulation
+            non_interface_elements = {
+                element_id for element_id in self.model.selected_elements
+                if
+                element_id in self.model.elements and not isinstance(self.model.elements[element_id], InterfaceElement)
+            }
+
+            if not non_interface_elements:
+                self.main_window.show_message(
+                    "Info", "Only interface elements were selected. Interface properties cannot be modified.", "info"
+                )
+                return
+
+            # Only update non-interface elements that match the current element type filter
             updated_count = self.model.update_elements(
                 material,
                 step,
-                element_type_filter=self.element_type_filter
+                element_type_filter=self.element_type_filter,
+                element_ids_to_update=non_interface_elements  # Pass only non-interface elements
             )
+
             self.render_mesh()
 
             # Update status message

@@ -122,7 +122,6 @@ class CanvasView:
                 friction = getattr(element, 'friction', 0.3)
 
                 # Get color index from model
-                # We need a reference to the model, which we should pass to render_mesh
                 if hasattr(self, 'model'):
                     color_index = self.model.get_friction_color_index(friction)
                 else:
@@ -130,6 +129,11 @@ class CanvasView:
                     color_index = int(friction * 10) % len(CANDE_COLORS)
 
                 fill_color = CANDE_COLORS[color_index]
+
+                # IMPORTANT: For interface elements, always use normal outline (never show as selected)
+                # This avoids confusing users since interfaces can't be modified
+                outline_width = 1
+                outline_color = "black"
 
                 # For interface elements, draw a diamond shape
                 # Get coordinates for interface element nodes (only need first two nodes for placement)

@@ -658,7 +658,7 @@ class CandeModel:
                 count += 1
         return count
 
-    def update_elements(self, material=None, step=None, element_type_filter=None) -> int:
+    def update_elements(self, material=None, step=None, element_type_filter=None, element_ids_to_update=None) -> int:
         """
         Update the material and/or step of selected elements.
 
@@ -666,6 +666,7 @@ class CandeModel:
             material: New material number (optional)
             step: New step number (optional)
             element_type_filter: Filter for element types, can be None, a string, or a list of strings
+            element_ids_to_update: Optional set of specific element IDs to update (if None, uses selected_elements)
 
         Returns:
             Number of elements updated
@@ -676,7 +677,10 @@ class CandeModel:
 
         updated_count = 0
 
-        for element_id in self.selected_elements:
+        # Use provided element IDs or fall back to selected elements
+        elements_to_update = element_ids_to_update if element_ids_to_update is not None else self.selected_elements
+
+        for element_id in elements_to_update:
             element = self.elements.get(element_id)
             if not element:
                 continue
