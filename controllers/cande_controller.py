@@ -674,14 +674,14 @@ class CandeController:
         # Get friction value from UI (textbox)
         try:
             friction = float(self.main_window.friction_var.get())
-            # Validate range
-            if friction < 0.0 or friction > 1.0:
-                raise ValueError("Friction must be between 0.0 and 1.0")
+            # Validate range - only check for negative values
+            if friction < 0.0:
+                raise ValueError("Friction must be non-negative (≥ 0.0)")
         except ValueError as e:
             # Show error and terminate
             self.main_window.show_message(
                 "Error",
-                f"Invalid friction value: {str(e)}. Please enter a valid number between 0.0 and 1.0.",
+                f"Invalid friction value: {str(e)}. Please enter a non-negative number.",
                 "error"
             )
             self.main_window.update_status("Interface creation cancelled: Invalid friction value")
