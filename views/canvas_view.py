@@ -206,7 +206,7 @@ class CanvasView:
                     # Draw the material ID text with the same color as the diamond
                     self.canvas.create_text(
                         material_text_x, material_text_y,
-                        text=f"{element.material}",  # Add "M" prefix for clarity
+                        text=f"{element.material}",
                         fill=fill_color,  # Use the same color as the diamond
                         font=("Arial", 8, "bold"),
                         tags=(f"material_text_{element_id}",)
