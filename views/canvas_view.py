@@ -203,11 +203,11 @@ class CanvasView:
                     material_text_x = avg_x + text_distance * math.cos(opposite_angle_rad)
                     material_text_y = avg_y - text_distance * math.sin(opposite_angle_rad)
 
-                    # Draw the material ID text
+                    # Draw the material ID text with the same color as the diamond
                     self.canvas.create_text(
                         material_text_x, material_text_y,
                         text=f"{element.material}",  # Add "M" prefix for clarity
-                        fill="green",  # Different color than angle text
+                        fill=fill_color,  # Use the same color as the diamond
                         font=("Arial", 8, "bold"),
                         tags=(f"material_text_{element_id}",)
                     )
