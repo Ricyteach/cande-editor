@@ -1,5 +1,6 @@
 """
 Element models for CANDE Input File Editor.
+Includes support for 1D beam elements, 2D soil elements, and interface elements with friction properties.
 """
 from dataclasses import dataclass
 from typing import List
@@ -61,7 +62,15 @@ class Element2D(BaseElement):
 class InterfaceElement(BaseElement):
     """Represents a 0D interface element in the CANDE model."""
     # Any interface-specific properties would go here
+    friction: float = 0.3  # Default friction coefficient
+    angle: float = 0.0  # Angle from horizontal of normal-force direction (in degrees)
+
     def __post_init__(self):
         super().__post_init__()
         if len(self.nodes) != 3:
             raise ValueError("Interface elements must consist of 3 nodes")
+        # Ensure angle is in the valid range
+        while self.angle < 0:
+            self.angle += 360.0
+        while self.angle >= 360.0:
+            self.angle -= 360.0

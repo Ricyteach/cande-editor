@@ -2,11 +2,12 @@
 Main controller for CANDE Input File Editor.
 """
 import tkinter as tk
-from typing import Dict, Set, Optional, Tuple, Any, cast
+from typing import Set, Any
 from enum import Enum, auto
 import logging
 
 from models.cande_model import CandeModel
+from models.element import Element1D
 from views.main_window import MainWindow
 from views.canvas_view import CanvasView, DisplayMode
 from utils.constants import LINE_ELEMENT_WIDTH
@@ -55,6 +56,7 @@ class CandeController:
 
         # Current display filter (None = show all)
         self.element_type_filter = None
+        self.on_element_type_change()  # Initialize filter based on checkboxes
 
         # Set up event handlers
         self._setup_callbacks()
@@ -163,13 +165,16 @@ class CandeController:
         # Get the current line width value from the UI
         current_line_width = self.main_window.line_width_var.get()
 
+        # Pass model reference to the canvas view for consistent interface coloring
+        self.canvas_view.model = self.model
+
         self.canvas_view.render_mesh(
             self.model.nodes,
             self.model.elements,
             self.model.selected_elements,
             self.model.max_material,
             self.model.max_step,
-            self.element_type_filter,  # Pass the list of element types to filter
+            self.element_type_filter,
             current_line_width
         )
 
@@ -300,12 +305,29 @@ class CandeController:
                 )
                 return
 
-            # Only update elements that match the current element type filter
+            # IMPORTANT: Filter out interface elements from the selection
+            # Interface elements have properties managed automatically by the interface creation routine
+            # and should not be manually modified to avoid breaking the simulation
+            non_interface_elements = {
+                element_id for element_id in self.model.selected_elements
+                if
+                element_id in self.model.elements and not isinstance(self.model.elements[element_id], InterfaceElement)
+            }
+
+            if not non_interface_elements:
+                self.main_window.show_message(
+                    "Info", "Only interface elements were selected. Interface properties cannot be modified.", "info"
+                )
+                return
+
+            # Only update non-interface elements that match the current element type filter
             updated_count = self.model.update_elements(
                 material,
                 step,
-                element_type_filter=self.element_type_filter
+                element_type_filter=self.element_type_filter,
+                element_ids_to_update=non_interface_elements  # Pass only non-interface elements
             )
+
             self.render_mesh()
 
             # Update status message
@@ -482,13 +504,13 @@ class CandeController:
         Returns:
             True if the element matches any filter in the list or if the list is empty
         """
-        # If filter is empty list, show nothing
-        if self.element_type_filter == []:
-            return False
-
         # If filter is None (legacy "All" selection), show everything
         if self.element_type_filter is None:
             return True
+
+        # If filter is empty list, show nothing
+        if self.element_type_filter == []:
+            return False
 
         # Check if element type is in the filter list
         for filter_type in self.element_type_filter:
@@ -635,24 +657,82 @@ class CandeController:
         self.main_window.update_status("Selection cleared")
 
     def create_interfaces(self) -> None:
-        """Create interface elements between beam elements and 2D elements."""
+        """
+        Create interface elements between beam elements and 2D elements.
+
+        Interface elements are created at shared nodes between beam elements,
+        with direction automatically calculated based on beam geometry.
+        Interfaces inherit the minimum step number from connected 2D elements
+        and use the friction value specified in the UI.
+
+        Interface elements are assigned unique material IDs based on their
+        friction and angle properties.
+        """
         if not self.model.nodes or not self.model.elements:
             self.main_window.show_message("Info", "No model loaded", "info")
             return
 
-        count = self.model.create_interfaces()
+        # Check if there's a selection
+        if not self.model.selected_elements:
+            self.main_window.show_message(
+                "Info",
+                "No elements selected. Please select beam elements first.",
+                "info"
+            )
+            return
+
+        # Get friction value from UI (textbox)
+        try:
+            friction = float(self.main_window.friction_var.get())
+            # Validate range - only check for negative values
+            if friction < 0.0:
+                raise ValueError("Friction must be non-negative (≥ 0.0)")
+        except ValueError as e:
+            # Show error and terminate
+            self.main_window.show_message(
+                "Error",
+                f"Invalid friction value: {str(e)}. Please enter a non-negative number.",
+                "error"
+            )
+            self.main_window.update_status("Interface creation cancelled: Invalid friction value")
+            return
+
+        # Create interface elements with the specified friction value
+        count, all_nodes_have_interfaces = self.model.create_interfaces(self.model.selected_elements, friction)
 
         if count > 0:
             self.render_mesh()
-            self.main_window.update_status(f"Created {count} interface elements")
+            self.main_window.update_status(f"Created {count} interface elements with friction {friction:.2f}")
             self.main_window.show_message(
                 "Success",
-                f"Created {count} interface elements with default material=1 and step=1",
+                f"Created {count} interface elements with friction {friction:.2f}",
                 "info"
             )
         else:
-            self.main_window.show_message(
-                "Info",
-                "No eligible nodes found for interface creation",
-                "info"
-            )
+            # Check if all nodes already have interfaces
+            if all_nodes_have_interfaces:
+                # This is the case we need to handle specifically
+                self.main_window.show_message(
+                    "Info",
+                    "No new interfaces created. All shared nodes in the selection already have interfaces attached.",
+                    "info"
+                )
+            else:
+                # Check if we have beam elements in the selection
+                has_beam_elements = any(isinstance(self.model.elements.get(element_id), Element1D)
+                                        for element_id in self.model.selected_elements)
+
+                if has_beam_elements:
+                    # We have beam elements but couldn't create interfaces for other reasons
+                    self.main_window.show_message(
+                        "Info",
+                        "No interfaces created. The selected beam elements don't share any nodes or don't connect to 2D elements.",
+                        "info"
+                    )
+                else:
+                    # No beam elements in selection
+                    self.main_window.show_message(
+                        "Info",
+                        "No eligible nodes found for interface creation. Try selecting beam elements first.",
+                        "info"
+                    )
