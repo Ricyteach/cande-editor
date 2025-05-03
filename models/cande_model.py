@@ -863,6 +863,33 @@ class CandeModel:
                 # Get the angle for this node (with default value of 0.0 if not found)
                 angle = node_angles.get(node_id, 0.0)
 
+                # Determine the appropriate load step for this interface
+                # Find all 2D elements that use this node
+                connected_2d_elements = [
+                    element for element_id, element in self.elements.items()
+                    if isinstance(element, Element2D) and node_id in element.nodes
+                ]
+
+                # Find the minimum step from connected 2D elements
+                min_step = 1  # Default if no 2D elements are found
+                if connected_2d_elements:
+                    min_step = min(element.step for element in connected_2d_elements)
+
+                # Create interface element with the determined step
+                interface_element_id = max_element_id + 1
+                max_element_id += 1
+
+                self.elements[interface_element_id] = InterfaceElement(
+                    element_id=interface_element_id,
+                    nodes=[i_node_id, j_node_id, k_node_id],
+                    material=1,  # Default material, will be updated by save_file
+                    step=min_step,  # Use the minimum step from connected 2D elements
+                    friction=friction,  # User specified friction
+                    angle=angle,  # Calculated angle
+                    line_number=-1,
+                    line_content=""
+                )
+
                 # Create interface element
                 interface_element_id = max_element_id + 1
                 max_element_id += 1
@@ -871,7 +898,7 @@ class CandeModel:
                     element_id=interface_element_id,
                     nodes=[i_node_id, j_node_id, k_node_id],
                     material=1,  # Default material, will be updated by save_file
-                    step=1,  # Default step
+                    step=min_step,  # Default step
                     friction=friction,  # User specified friction
                     angle=angle,  # Calculated angle
                     line_number=-1,
