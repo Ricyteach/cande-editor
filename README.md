@@ -77,7 +77,7 @@ Click the "Open File" button or press Ctrl+O to open a CANDE input file (.cid).
 - Interface elements are automatically assigned unique material types in the CANDE file
 - **Creating Interfaces**: Select beam elements, set the desired friction value, and click "Create Interfaces"
 
-For detailed instructions on creating and working with interface elements, see the [Interface Element Creation Guide](docs/INTERFACE_GUIDE).
+For detailed instructions on creating and working with interface elements, see the [Interface Element Creation Guide](docs/INTERFACE_GUIDE.md).
 
 ### Display Mode
 
