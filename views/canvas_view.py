@@ -49,17 +49,24 @@ class CanvasView:
     def render_mesh(self, nodes, elements, selected_elements, max_material=1, max_step=1,
                     element_type_filter=None, line_width=3) -> None:
         """
-        Render the mesh on the canvas.
+            Render the mesh on the canvas.
 
-        Args:
-            nodes: Dictionary of nodes
-            elements: Dictionary of elements
-            selected_elements: Set of selected element IDs
-            max_material: Maximum material number for color mapping
-            max_step: Maximum step number for color mapping
-            element_type_filter: List of element types to display, None means display all
-            line_width: Width for 1D elements
-        """
+            Special rendering is applied to interface elements to show:
+            - Diamond-shaped markers at interface locations
+            - Red arrows indicating the direction of normal force
+            - Green dashed lines showing the interface plane
+            - Color-coding based on friction values
+            - Material and angle labels for better identification
+
+            Args:
+                nodes: Dictionary of nodes
+                elements: Dictionary of elements
+                selected_elements: Set of selected element IDs
+                max_material: Maximum material number for color mapping
+                max_step: Maximum step number for color mapping
+                element_type_filter: List of element types to display, None means display all
+                line_width: Width for 1D elements
+            """
         if not nodes or not elements:
             return
 

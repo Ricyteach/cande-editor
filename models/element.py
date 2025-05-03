@@ -1,5 +1,6 @@
 """
 Element models for CANDE Input File Editor.
+Includes support for 1D beam elements, 2D soil elements, and interface elements with friction properties.
 """
 from dataclasses import dataclass
 from typing import List

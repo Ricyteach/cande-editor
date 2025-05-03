@@ -1,5 +1,7 @@
 """
-Main model class for CANDE Input File Editor with improved interface material handling.
+Main model class for CANDE Input File Editor.
+Handles data structures and operations for CANDE input files, including
+nodes, elements, and enhanced interface element support with material properties.
 """
 import re
 from typing import Dict, List, Set, Optional, Tuple

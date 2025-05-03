@@ -657,7 +657,17 @@ class CandeController:
         self.main_window.update_status("Selection cleared")
 
     def create_interfaces(self) -> None:
-        """Create interface elements between beam elements and 2D elements."""
+        """
+        Create interface elements between beam elements and 2D elements.
+
+        Interface elements are created at shared nodes between beam elements,
+        with direction automatically calculated based on beam geometry.
+        Interfaces inherit the minimum step number from connected 2D elements
+        and use the friction value specified in the UI.
+
+        Interface elements are assigned unique material IDs based on their
+        friction and angle properties.
+        """
         if not self.model.nodes or not self.model.elements:
             self.main_window.show_message("Info", "No model loaded", "info")
             return
