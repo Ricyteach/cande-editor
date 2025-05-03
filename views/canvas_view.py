@@ -196,6 +196,22 @@ class CanvasView:
                         tags=(f"angle_text_{element_id}",)
                     )
 
+                    # Material ID text
+                    # Calculate position on opposite side of diamond from the angle indicator
+                    opposite_angle_rad = angle_rad + math.pi  # Opposite direction from angle indicator
+                    text_distance = indicator_length * 0.8  # Same offset factor as for angle text
+                    material_text_x = avg_x + text_distance * math.cos(opposite_angle_rad)
+                    material_text_y = avg_y - text_distance * math.sin(opposite_angle_rad)
+
+                    # Draw the material ID text
+                    self.canvas.create_text(
+                        material_text_x, material_text_y,
+                        text=f"{element.material}",  # Add "M" prefix for clarity
+                        fill="green",  # Different color than angle text
+                        font=("Arial", 8, "bold"),
+                        tags=(f"material_text_{element_id}",)
+                    )
+
                     # Add a perpendicular tick mark to indicate the interface plane
                     perp_length = 10
                     perp_angle_rad = angle_rad + math.pi / 2  # Perpendicular to force direction
