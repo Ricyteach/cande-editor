@@ -1,5 +1,5 @@
 """
-Main model class for CANDE Input File Editor.
+Main model class for CANDE Input File Editor with improved interface material handling.
 """
 import re
 from typing import Dict, List, Set, Optional, Tuple
@@ -38,6 +38,12 @@ class CandeModel:
         self.elements: Dict[int, BaseElement] = {}
         self.selected_elements: Set[int] = set()
         self.file_content: List[str] = []
+
+        # Dictionary to store interface materials mapping (material_id -> (friction, angle))
+        self.interface_materials: Dict[int, Tuple[float, float]] = {}
+
+        # Dictionary to map friction values to consistent color indices
+        self.friction_color_map: Dict[float, int] = {}
 
         # Model dimensions
         self.model_min_x: float = 0.0
@@ -78,6 +84,10 @@ class CandeModel:
         self.nodes.clear()
         self.elements.clear()
 
+        # Clear and parse interface materials
+        self.interface_materials.clear()
+        self.interface_materials = self._parse_interface_materials()
+
         # More general patterns to catch nodes and elements
         # Node pattern - match any line with node ID followed by X and Y coordinates
         node_pattern = re.compile(r'^\s*C-3\.L3!![ L]+(\d+)\s+\w+\s+(-?[\d.]+)\s+(-?[\d.]+)')
@@ -115,7 +125,7 @@ class CandeModel:
                 node4 = int(element_match.group(5))
                 material = int(element_match.group(6))
                 step = int(element_match.group(7))
-                element_class = int(element_match.group(8))
+                element_class = int(element_match.group(8)) if element_match.group(8) else 0
 
                 # Count actual nodes (non-zero)
                 node_ids = [n for n in [node1, node2, node3, node4] if n != 0]
@@ -123,30 +133,90 @@ class CandeModel:
 
                 # Create appropriate element type based on element class and node count
                 # Now include 1D (2-node) elements and interface elements
-                if ELEMENT_CLASS_DICT[element_class] is InterfaceElement:
-                    element_type = InterfaceElement
+                if element_class == 1:  # Interface element
+                    element = InterfaceElement(
+                        element_id=element_id,
+                        nodes=node_ids,
+                        material=material,
+                        step=step,
+                        line_number=line_num,
+                        line_content=line,
+                    )
+
+                    # Set friction and angle if available from interface materials
+                    if material in self.interface_materials:
+                        friction, angle = self.interface_materials[material]
+                        element.friction = friction
+                        element.angle = angle
+                        logger.info(
+                            f"Set interface element {element_id} with material {material}: friction={friction}, angle={angle}")
+                    else:
+                        logger.warning(
+                            f"Interface element {element_id} uses material {material}, but no material definition found")
+
+                    self.elements[element_id] = element
+
                 elif node_count in ELEMENT_TYPE_DICT:
                     element_type = ELEMENT_TYPE_DICT[node_count]
+
+                    self.elements[element_id] = element_type(
+                        element_id=element_id,
+                        nodes=node_ids,
+                        material=material,
+                        step=step,
+                        line_number=line_num,
+                        line_content=line,
+                    )
+
+                    if isinstance(self.elements[element_id], Element2D):
+                        self.ensure_valid_2d_element_ordering(self.elements[element_id])
                 else:
                     logger.warning(
                         f"Unknown element type: ID={element_id}, node_count={node_count}, class={element_class}")
                     continue  # Skip this element
 
-                self.elements[element_id] = element_type(
-                    element_id=element_id,
-                    nodes=node_ids,
-                    material=material,
-                    step=step,
-                    line_number=line_num,
-                    line_content=line,
-                )
-                if isinstance(self.elements[element_id], Element2D):
-                    self.ensure_valid_2d_element_ordering(self.elements[element_id])
                 # Update max material and step numbers
                 self.max_material = max(self.max_material, material)
                 self.max_step = max(self.max_step, step)
 
         logger.info(f"Loaded {len(self.nodes)} nodes and {len(self.elements)} elements")
+        logger.info(f"Loaded {len(self.interface_materials)} interface materials")
+
+    def _parse_interface_materials(self) -> Dict[int, Tuple[float, float]]:
+        """
+        Parse interface material definitions from the CANDE file.
+
+        Returns:
+            Dictionary mapping material_id to (friction, angle)
+        """
+        interface_materials = {}
+
+        i = 0
+        while i < len(self.file_content):
+            line = self.file_content[i]
+
+            # Check for D-1 lines (interface material definition)
+            if "D-1!!" in line:
+                # Extract material ID
+                d1_match = re.search(r'D-1!![ L]+(\d+)', line)
+                if d1_match:
+                    material_id = int(d1_match.group(1))
+
+                    # Check if the next line is a D-2.Interface line
+                    if i + 1 < len(self.file_content) and "D-2.Interface!!" in self.file_content[i + 1]:
+                        d2_line = self.file_content[i + 1]
+                        # Parse angle and friction values
+                        d2_match = re.search(r'D-2\.Interface!![ ]*(-?[\d.]+)[ ]*(-?[\d.]+)', d2_line)
+                        if d2_match:
+                            angle = float(d2_match.group(1))
+                            friction = float(d2_match.group(2))
+                            # Store in interface materials dictionary
+                            interface_materials[material_id] = (friction, angle)
+                            logger.info(
+                                f"Found interface material {material_id} with friction={friction}, angle={angle}")
+            i += 1
+
+        return interface_materials
 
     def calculate_model_extents(self) -> None:
         """Calculate the extents of the model for zooming."""
@@ -222,55 +292,8 @@ class CandeModel:
                 node_line = self._generate_node_line(node)
                 new_node_lines.append(node_line)
 
-        # Find all interface elements in geometric order
-        interface_elements = []
-        for element_id, element in sorted(self.elements.items()):
-            if isinstance(element, InterfaceElement) and element.line_number == -1:
-                interface_elements.append((element_id, element))
-
-        # Add new elements (including interface elements in geometric order)
-        new_element_lines = []
-        for element_id, element in self.elements.items():
-            if element.line_number == -1 and not isinstance(element, InterfaceElement):
-                # Generate element line in CANDE format (non-interface elements)
-                element_line = self._generate_element_line(element)
-                new_element_lines.append(element_line)
-
-        # Interface material handling is similar to existing code, but ensures ordering is preserved
-        interface_materials = {}  # Maps material_id to (friction, angle)
-        interface_material_mapping = {}  # Maps element_id to material_id
-
-        # Assign material numbers to interface elements in geometric order
-        next_material_id = 1
-        for element_id, element in interface_elements:
-            # Create a unique material for each interface element to preserve ordering
-            material_id = next_material_id
-            interface_materials[material_id] = (element.friction, element.angle)
-            next_material_id += 1
-
-            # Map this element to the material and update element immediately
-            interface_material_mapping[element_id] = material_id
-            element.material = material_id  # Update material number in memory immediately
-
-        # Generate D-1 and D-2 lines for interface materials
-        interface_material_lines = []
-        for i, (material_id, (friction, angle)) in enumerate(sorted(interface_materials.items())):
-            # For the last material, use "L" in the first field, otherwise use " "
-            is_last = (i == len(interface_materials) - 1)
-            first_field = "L" if is_last else " "
-
-            # Material name: "Inter #X" where X is the material ID
-            material_name = f"Inter #{material_id}"
-
-            # D-1 line
-            d1_line = (f"                      D-1!!{first_field}{material_id:4d}{6:5d}"
-                       f"{0:10d}{material_name:>20s}\n")
-
-            # D-2 line
-            d2_line = f"            D-2.Interface!!{angle:10.3f}{friction:10.3f}\n"
-
-            interface_material_lines.append(d1_line)
-            interface_material_lines.append(d2_line)
+        # Generate interface material lines and update elements
+        interface_material_mapping, interface_material_lines = self._generate_interface_material_lines()
 
         # Update existing interface elements in the file with new material IDs
         for element_id, material_id in interface_material_mapping.items():
@@ -296,6 +319,20 @@ class CandeModel:
                     new_line = prefix + material_str + suffix
                     new_file_content[element.line_number] = new_line
                     element.line_content = new_line
+
+        # Find all interface elements in geometric order
+        interface_elements = []
+        for element_id, element in sorted(self.elements.items()):
+            if isinstance(element, InterfaceElement) and element.line_number == -1:
+                interface_elements.append((element_id, element))
+
+        # Add new elements (non-interface elements)
+        new_element_lines = []
+        for element_id, element in self.elements.items():
+            if element.line_number == -1 and not isinstance(element, InterfaceElement):
+                # Generate element line in CANDE format (non-interface elements)
+                element_line = self._generate_element_line(element)
+                new_element_lines.append(element_line)
 
         # Now add interface elements in geometric order (with their updated material numbers)
         for element_id, element in interface_elements:
@@ -525,10 +562,6 @@ class CandeModel:
         Returns:
             An index into the CANDE_COLORS list
         """
-        # Initialize friction color map if it doesn't exist
-        if not hasattr(self, 'friction_color_map'):
-            self.friction_color_map = {}
-
         # Round friction to 2 decimal places for consistent grouping
         rounded_friction = round(friction, 2)
 
@@ -1543,6 +1576,69 @@ class CandeModel:
         # Adjust format based on your CANDE file format
         return (f"                   C-4.L3!! {element.element_id:4d}{node_ids[0]:5d}{node_ids[1]:5d}{node_ids[2]:5d}"
                 f"{node_ids[3]:5d}{element.material:5d}{element.step:5d}{element_type:5d}\n")
+
+    def _generate_interface_material_lines(self) -> Tuple[Dict[int, int], List[str]]:
+        """
+        Generate D-1 and D-2 lines for interface materials.
+
+        Returns:
+            Tuple of (interface_material_mapping, interface_material_lines):
+                - interface_material_mapping: Maps element_id to material_id
+                - interface_material_lines: List of D-1 and D-2 lines for the materials
+        """
+        interface_materials = {}  # Maps material_id to (friction, angle)
+        interface_material_mapping = {}  # Maps element_id to material_id
+
+        # Collect unique friction/angle combinations
+        next_material_id = 1
+        for element_id, element in sorted(self.elements.items()):
+            if isinstance(element, InterfaceElement):
+                # Create a unique material for each friction/angle combination
+                friction = getattr(element, 'friction', 0.3)
+                angle = getattr(element, 'angle', 0.0)
+
+                # Check if this friction/angle combination already has a material
+                existing_material_id = None
+                for mat_id, (mat_friction, mat_angle) in interface_materials.items():
+                    if abs(friction - mat_friction) < 1e-6 and abs(angle - mat_angle) < 1e-6:
+                        existing_material_id = mat_id
+                        break
+
+                if existing_material_id is not None:
+                    # Use existing material
+                    material_id = existing_material_id
+                else:
+                    # Create new material
+                    material_id = next_material_id
+                    interface_materials[material_id] = (friction, angle)
+                    next_material_id += 1
+
+                # Map this element to the material and update element immediately
+                interface_material_mapping[element_id] = material_id
+                element.material = material_id  # Update material number in memory immediately
+
+        # Generate D-1 and D-2 lines for interface materials
+        interface_material_lines = []
+
+        for i, (material_id, (friction, angle)) in enumerate(sorted(interface_materials.items())):
+            # For the last material, use "L" in the first field, otherwise use " "
+            is_last = (i == len(interface_materials) - 1)
+            first_field = "L" if is_last else " "
+
+            # Material name: "Inter #X" where X is the material ID
+            material_name = f"Inter #{material_id}"
+
+            # D-1 line
+            d1_line = (f"                      D-1!!{first_field}{material_id:4d}{6:5d}"
+                       f"{0:10d}{material_name:>20s}\n")
+
+            # D-2 line
+            d2_line = f"            D-2.Interface!!{angle:10.3f}{friction:10.3f}\n"
+
+            interface_material_lines.append(d1_line)
+            interface_material_lines.append(d2_line)
+
+        return interface_material_mapping, interface_material_lines
 
     def ensure_valid_2d_element_ordering(self, element: Element2D) -> bool:
         """
