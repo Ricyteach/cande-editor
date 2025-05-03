@@ -10,7 +10,6 @@ from models.cande_model import CandeModel
 from models.element import Element1D
 from views.main_window import MainWindow
 from views.canvas_view import CanvasView, DisplayMode
-from utils.constants import LINE_ELEMENT_WIDTH
 
 # Configure logging
 logger = logging.getLogger(__name__)

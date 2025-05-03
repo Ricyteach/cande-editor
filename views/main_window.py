@@ -3,7 +3,7 @@ Main window view for CANDE Input File Editor.
 """
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from typing import Dict, Callable, Any, Optional, List
+from typing import Dict, Callable, Optional, List
 
 from utils.constants import LINE_ELEMENT_WIDTH
 

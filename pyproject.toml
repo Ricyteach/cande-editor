@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cande-editor"
+version = "2.0"
+description = "A GUI tool for editing CANDE input files (.cid)"
+authors = [
+    {name = "Rick Teachey", email = "ricky@teachey.org"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.scripts]
+cande-editor = "main:main"
+
+[tool.setuptools]
+py-modules = [
+    "main",
+    "controllers.cande_controller",
+    "models.cande_model",
+    "models.element",
+    "models.node",
+    "views.canvas_view",
+    "views.main_window",
+    "utils.constants"
+]
