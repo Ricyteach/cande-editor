@@ -911,6 +911,9 @@ class CandeModel:
                 # ONLY UPDATE BEAM ELEMENTS IN THE SELECTION
                 self._update_beam_elements_for_interface(node_id, i_node_id, beam_elements.keys())
 
+        # Assign proper material IDs to all interface elements
+        self.assign_interface_material_ids()
+
         # At the end, return the count of created interfaces and False since some nodes were eligible
         return interface_count, False
 
@@ -1756,3 +1759,39 @@ class CandeModel:
             return (c[1] - a[1]) * (b[0] - a[0]) > (b[1] - a[1]) * (c[0] - a[0])
 
         return ccw(p1, p3, p4) != ccw(p2, p3, p4) and ccw(p1, p2, p3) != ccw(p1, p2, p4)
+
+    def assign_interface_material_ids(self):
+        """
+        Assign unique material IDs to interface elements based on their properties.
+        Call this after creating new interface elements but before rendering.
+        """
+        # Map of (friction, angle) -> material_id
+        property_to_material = {}
+        next_material_id = 1
+
+        # First pass: find existing material mappings if any
+        for element_id, element in self.elements.items():
+            if isinstance(element, InterfaceElement) and element.material > 1:
+                # This element already has a non-default material ID
+                friction = getattr(element, 'friction', 0.3)
+                angle = getattr(element, 'angle', 0.0)
+                property_to_material[(friction, angle)] = element.material
+                next_material_id = max(next_material_id, element.material + 1)
+
+        # Second pass: assign material IDs to elements with default material=1
+        for element_id, element in self.elements.items():
+            if isinstance(element, InterfaceElement) and element.material == 1:
+                friction = getattr(element, 'friction', 0.3)
+                angle = getattr(element, 'angle', 0.0)
+
+                # If we've seen this property combination before, use its material ID
+                if (friction, angle) in property_to_material:
+                    element.material = property_to_material[(friction, angle)]
+                else:
+                    # Otherwise, assign a new material ID
+                    element.material = next_material_id
+                    property_to_material[(friction, angle)] = next_material_id
+                    next_material_id += 1
+
+        # Return the number of unique materials assigned
+        return len(property_to_material)
