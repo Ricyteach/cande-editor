@@ -17,26 +17,17 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-dependencies = [
-    "pydantic>=2.0.0",
-]
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-]
 
 [project.scripts]
 cande-editor = "main:main"
 
-[tool.setuptools]
-py-modules = [
+[tool.setuptools.py-modules]
+modules = [
+    "cande_editor",
+    "controllers",
+    "domain",
+    "models",
+    "utils",
+    "views",
     "main",
-    "controllers.cande_controller",
-    "models.cande_model",
-    "models.element",
-    "models.node",
-    "views.canvas_view",
-    "views.main_window",
-    "utils.constants"
 ]
