@@ -35,15 +35,22 @@ class Polygon(BaseModel):
 
         return v
 
-    @model_validator(mode="after")
-    def normalize_orientation(self):
-        """Ensure the polygon is oriented counter-clockwise."""
-        if self.is_clockwise():
-            # Reverse the vertices to make it counter-clockwise
-            reversed_vertices = self.vertices[::-1]
-            # We need to create a new instance since we're frozen
-            return Polygon(vertices=reversed_vertices)
-        return self
+    @field_validator("vertices", mode="after")
+    @classmethod
+    def ensure_counter_clockwise(cls, vertices: List[Point]) -> List[Point]:
+        """Ensure vertices are ordered counter-clockwise."""
+        # Calculate signed area to determine orientation
+        area = 0.0
+        for i in range(len(vertices)):
+            current = vertices[i]
+            next_vertex = vertices[(i + 1) % len(vertices)]
+            area += current.x * next_vertex.y - next_vertex.x * current.y
+        area /= 2.0
+
+        # If area is negative, vertices are clockwise - reverse them
+        if area < 0:
+            return vertices[::-1]
+        return vertices
 
     @model_validator(mode="after")
     def validate_no_self_intersection(self):
@@ -205,50 +212,6 @@ class Polygon(BaseModel):
 
         first_sign = cross_products[0] >= 0
         return all((cp >= 0) == first_sign for cp in cross_products)
-
-    def offset(self, distance: float) -> Optional["Polygon"]:
-        """
-        Create an offset polygon (positive distance for outward, negative for inward).
-
-        Note: This is a simplified implementation that works for convex polygons.
-        For non-convex polygons, a more sophisticated algorithm is needed.
-
-        Args:
-            distance: The distance to offset (positive for outward expansion)
-
-        Returns:
-            The offset polygon or None if the operation results in degenerate polygon
-        """
-        # This is a simplified implementation for convex polygons
-        offset_vertices = []
-
-        for i in range(len(self.vertices)):
-            prev_i = (i - 1) % len(self.vertices)
-            next_i = (i + 1) % len(self.vertices)
-
-            prev_edge = Line(start=self.vertices[prev_i], end=self.vertices[i])
-            next_edge = Line(start=self.vertices[i], end=self.vertices[next_i])
-
-            # Get normalized normal vectors pointing outward
-            prev_normal = prev_edge.unit_normal_vector
-            next_normal = next_edge.unit_normal_vector
-
-            # Average the normals for the offset direction at this vertex
-            avg_normal_x = (prev_normal.x + next_normal.x) / 2
-            avg_normal_y = (prev_normal.y + next_normal.y) / 2
-
-            # Normalize the average
-            magnitude = math.sqrt(avg_normal_x ** 2 + avg_normal_y ** 2)
-            if magnitude > EPSILON:
-                offset_x = self.vertices[i].x + distance * avg_normal_x / magnitude
-                offset_y = self.vertices[i].y + distance * avg_normal_y / magnitude
-                offset_vertices.append(Point(x=offset_x, y=offset_y))
-
-        try:
-            return Polygon(vertices=offset_vertices)
-        except ValueError:
-            # If offset creates invalid polygon, return None
-            return None
 
     def __str__(self) -> str:
         """String representation of the polygon."""
