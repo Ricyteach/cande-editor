@@ -2,6 +2,7 @@ from typing import Optional
 from pydantic import Field, field_validator, model_validator
 from utils.constants import WATER_UNIT_WEIGHT
 from utils.base_model import ImmutableModel
+from domain.core.resistance_factors import ResistanceFactors
 
 
 class SoilMaterial(ImmutableModel):
@@ -56,3 +57,21 @@ class SoilMaterial(ImmutableModel):
     def buoyant_unit_weight(self) -> float:
         """Calculate buoyant unit weight (derived property)."""
         return self.saturated_unit_weight - WATER_UNIT_WEIGHT
+
+
+class StructuralMaterial(ImmutableModel):
+    """
+    Base class for structural materials.
+
+    Contains only fundamental physical properties,
+    independent of behavioral models or CANDE-specific details.
+    """
+    name: str = Field(description="Material name/identifier")
+    description: Optional[str] = Field(default=None, description="Optional description")
+    unit_weight: Optional[float] = Field(default=None, description="Unit weight (if relevant)")
+
+    # Replace individual resistance factors with a container
+    resistance_factors: Optional[ResistanceFactors] = Field(
+        default=None,
+        description="LRFD resistance factors for various limit states"
+    )

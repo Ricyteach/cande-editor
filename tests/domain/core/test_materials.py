@@ -1,6 +1,7 @@
 # tests/domain/core/test_materials.py
 import pytest
-from domain.core.materials import SoilMaterial
+from domain.core.materials import SoilMaterial, StructuralMaterial
+from domain.core.resistance_factors import ResistanceFactors
 from utils.constants import WATER_UNIT_WEIGHT
 
 
@@ -162,3 +163,206 @@ class TestSoilMaterial:
         assert reconstructed.name == original.name
         assert reconstructed.wet_unit_weight == original.wet_unit_weight
         assert reconstructed.saturated_unit_weight == original.saturated_unit_weight
+
+
+class TestStructuralMaterial:
+    """Test suite for the StructuralMaterial class."""
+
+    def test_create_basic_material(self):
+        """Test creating a basic structural material with minimal properties."""
+        material = StructuralMaterial(name="Basic Material")
+
+        assert material.name == "Basic Material"
+        assert material.description is None
+        assert material.unit_weight is None
+        assert material.resistance_factors is None
+
+    def test_create_complete_material(self):
+        """Test creating a structural material with all properties."""
+        # Create resistance factors
+        factors = ResistanceFactors.from_values({
+            "compression": 0.9,
+            "flexure": 0.85,
+            "shear": 0.75
+        })
+
+        material = StructuralMaterial(
+            name="Complete Material",
+            description="A fully specified material",
+            unit_weight=78.5,
+            resistance_factors=factors
+        )
+
+        assert material.name == "Complete Material"
+        assert material.description == "A fully specified material"
+        assert material.unit_weight == 78.5
+        assert material.resistance_factors is factors
+        assert material.resistance_factors.get_value("compression") == 0.9
+        assert material.resistance_factors.get_value("flexure") == 0.85
+        assert material.resistance_factors.get_value("shear") == 0.75
+
+    def test_with_changes_basic(self):
+        """Test creating a modified copy with basic property changes."""
+        original = StructuralMaterial(
+            name="Original Material",
+            unit_weight=78.5
+        )
+
+        # Modify a simple property
+        modified = original.with_changes(
+            name="Modified Material"
+        )
+
+        # Verify original is unchanged
+        assert original.name == "Original Material"
+        assert original.unit_weight == 78.5
+
+        # Verify modified properties
+        assert modified.name == "Modified Material"
+        assert modified.unit_weight == 78.5  # Preserved from original
+
+    def test_with_changes_resistance_factors(self):
+        """Test creating a modified copy with different resistance factors."""
+        # Initial factors
+        initial_factors = ResistanceFactors.from_values({
+            "compression": 0.9,
+            "flexure": 0.85
+        })
+
+        original = StructuralMaterial(
+            name="Original Material",
+            resistance_factors=initial_factors
+        )
+
+        # Create new factors
+        new_factors = ResistanceFactors.from_values({
+            "compression": 0.85,
+            "flexure": 0.9,
+            "shear": 0.75  # Added new factor
+        })
+
+        # Create modified copy with new factors
+        modified = original.with_changes(
+            resistance_factors=new_factors
+        )
+
+        # Verify original is unchanged
+        assert original.resistance_factors is initial_factors
+        assert original.resistance_factors.get_value("compression") == 0.9
+        assert original.resistance_factors.get_value("flexure") == 0.85
+        assert original.resistance_factors.get_factor("shear") is None
+
+        # Verify modified has new factors
+        assert modified.name == "Original Material"  # Preserved
+        assert modified.resistance_factors is new_factors
+        assert modified.resistance_factors.get_value("compression") == 0.85
+        assert modified.resistance_factors.get_value("flexure") == 0.9
+        assert modified.resistance_factors.get_value("shear") == 0.75
+
+    def test_with_changes_add_factors(self):
+        """Test adding resistance factors to a material that didn't have them."""
+        original = StructuralMaterial(
+            name="Original Material",
+            unit_weight=78.5
+            # No resistance factors
+        )
+
+        # Add factors in a modified copy
+        factors = ResistanceFactors.from_values({
+            "compression": 0.9,
+            "flexure": 0.85
+        })
+
+        modified = original.with_changes(
+            resistance_factors=factors
+        )
+
+        # Verify original is unchanged
+        assert original.resistance_factors is None
+
+        # Verify modified has the factors
+        assert modified.name == "Original Material"
+        assert modified.unit_weight == 78.5
+        assert modified.resistance_factors is factors
+        assert modified.resistance_factors.get_value("compression") == 0.9
+        assert modified.resistance_factors.get_value("flexure") == 0.85
+
+    def test_with_changes_multiple_properties(self):
+        """Test changing multiple properties at once."""
+        original = StructuralMaterial(
+            name="Original Material"
+        )
+
+        # Create factors
+        factors = ResistanceFactors.from_values({
+            "compression": 0.9
+        })
+
+        # Change multiple properties
+        modified = original.with_changes(
+            name="Modified Material",
+            description="Updated description",
+            unit_weight=78.5,
+            resistance_factors=factors
+        )
+
+        # Verify modified has all changes
+        assert modified.name == "Modified Material"
+        assert modified.description == "Updated description"
+        assert modified.unit_weight == 78.5
+        assert modified.resistance_factors is factors
+        assert modified.resistance_factors.get_value("compression") == 0.9
+
+    def test_immutability(self):
+        """Test that structural materials are immutable."""
+        factors = ResistanceFactors.from_values({"compression": 0.9})
+        material = StructuralMaterial(
+            name="Test Material",
+            resistance_factors=factors
+        )
+
+        # Try to modify properties directly
+        with pytest.raises(Exception):
+            material.name = "Modified"
+
+        with pytest.raises(Exception):
+            material.description = "New description"
+
+        with pytest.raises(Exception):
+            material.unit_weight = 80.0
+
+        with pytest.raises(Exception):
+            material.resistance_factors = None
+
+        # Verify no changes occurred
+        assert material.name == "Test Material"
+        assert material.resistance_factors is factors
+
+    def test_invalid_field_with_changes(self):
+        """Test that with_changes validates field names."""
+        material = StructuralMaterial(name="Test Material")
+
+        # Try to change a non-existent field
+        with pytest.raises(ValueError, match="Invalid field"):
+            material.with_changes(nonexistent_field="value")
+
+
+    def test_material_with_resistance_factors(self):
+        """Test structural material with resistance factors."""
+        # Create resistance factors
+        factors = ResistanceFactors.from_values({
+            "compression": 0.9,
+            "flexure": 0.85,
+            "shear": 0.75
+        })
+
+        # Create material with factors
+        material = StructuralMaterial(
+            name="Steel Material",
+            resistance_factors=factors
+        )
+
+        assert material.name == "Steel Material"
+        assert material.resistance_factors is factors
+        assert material.resistance_factors.get_value("compression") == 0.9
+        assert material.resistance_factors.get_value("flexure") == 0.85
