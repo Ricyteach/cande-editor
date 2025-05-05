@@ -1,9 +1,10 @@
 # domain/parameters.py
 from typing import Dict, Optional
-from pydantic import BaseModel, Field
+from utils.base_model import ImmutableModel
+from pydantic import Field
 
 
-class Parameter(BaseModel):
+class Parameter(ImmutableModel):
     """A parameter with a value and optional unit.
 
     This is the fundamental building block for storing numerical values
@@ -13,22 +14,14 @@ class Parameter(BaseModel):
     value: float = Field(description="Numerical value")
     unit: Optional[str] = Field(default=None, description="Unit string (e.g., 'kPa', 'm', 'degrees')")
 
-    model_config = {
-        "frozen": True,  # Make immutable
-    }
 
-
-class ModelParameters(BaseModel):
+class ModelParameters(ImmutableModel):
     """Container for model parameters.
 
     Each parameter can have its own unit. Parameters are accessed by name
     and can be retrieved as raw values for later unit conversion by upper layers.
     """
     parameters: Dict[str, Parameter] = Field(description="Named parameters")
-
-    model_config = {
-        "frozen": True,  # Make immutable
-    }
 
     def get_value(self, key: str) -> Optional[float]:
         """Get raw parameter value."""

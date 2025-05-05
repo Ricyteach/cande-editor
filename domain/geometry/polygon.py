@@ -1,12 +1,12 @@
-from typing import List, Tuple, Optional
-from pydantic import BaseModel, Field, field_validator, model_validator
-import math
+from typing import List, Tuple
+from pydantic import Field, field_validator, model_validator
 from domain.geometry.point import Point
 from domain.geometry.line import Line
 from domain.geometry.constants import EPSILON
+from utils.base_model import ImmutableModel
 
 
-class Polygon(BaseModel):
+class Polygon(ImmutableModel):
     """
     Represents a closed polygon defined by a sequence of vertices.
 
@@ -14,10 +14,6 @@ class Polygon(BaseModel):
     that it doesn't self-intersect.
     """
     vertices: List[Point] = Field(description="List of vertices defining the polygon")
-
-    model_config = {
-        "frozen": True,  # Make the class immutable
-    }
 
     @field_validator("vertices")
     @classmethod

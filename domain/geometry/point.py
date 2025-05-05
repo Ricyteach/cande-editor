@@ -1,10 +1,11 @@
 # domain/geometry/point.py
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 import math
 from domain.geometry.constants import EPSILON
+from utils.base_model import ImmutableModel
 
 
-class Point(BaseModel):
+class Point(ImmutableModel):
     """
     Represents a 2D point in Cartesian coordinates.
 
@@ -13,10 +14,6 @@ class Point(BaseModel):
     """
     x: float = Field(description="X coordinate")
     y: float = Field(description="Y coordinate")
-
-    model_config = {
-        "frozen": True,  # Make the class immutable
-    }
 
     @field_validator("x", "y")
     @classmethod

@@ -1,11 +1,12 @@
 from typing import Optional, Tuple
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 import math
 from domain.geometry.point import Point
 from domain.geometry.constants import EPSILON
+from utils.base_model import ImmutableModel
 
 
-class Line(BaseModel):
+class Line(ImmutableModel):
     """
     Represents a line segment defined by two points.
 
@@ -14,10 +15,6 @@ class Line(BaseModel):
     """
     start: Point = Field(description="Starting point of the line segment")
     end: Point = Field(description="Ending point of the line segment")
-
-    model_config = {
-        "frozen": True,  # Make the class immutable
-    }
 
     @field_validator("start", "end")
     @classmethod
