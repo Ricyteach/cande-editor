@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "cande-editor"
+name = "cande_editor"
 version = "2.0"
 description = "A GUI tool for editing CANDE input files (.cid)"
 authors = [
@@ -21,14 +21,12 @@ classifiers = [
 [project.scripts]
 cande-editor = "main:main"
 
-[tool.setuptools]
-py-modules = [
+[tool.setuptools.py-modules]
+modules = [
+    "cande_editor",
+    "controllers",
+    "models",
+    "utils",
+    "views",
     "main",
-    "controllers.cande_controller",
-    "models.cande_model",
-    "models.element",
-    "models.node",
-    "views.canvas_view",
-    "views.main_window",
-    "utils.constants"
 ]
