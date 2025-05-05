@@ -51,3 +51,8 @@ NORMAL_ELEMENT_WIDTH = 1
 CANVAS_PADDING = 0.05  # 5% padding for zoom to fit
 CLICK_THRESHOLD = 5  # Pixels to distinguish click from drag
 ZOOM_FACTOR = 1.1  # Zoom in/out factor per mouse wheel tick
+
+# TODO: resolve with unit system
+# Standard physical constants
+WATER_UNIT_WEIGHT = 9.81  # kN/m³ (SI units)
+WATER_UNIT_WEIGHT_IMPERIAL = 62.4  # lb/ft³ (Imperial units)
