@@ -33,6 +33,7 @@ cande-editor = "main:main"
 modules = [
     "cande_editor",
     "controllers",
+    "domain",
     "models",
     "utils",
     "views",
