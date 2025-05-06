@@ -1,4 +1,5 @@
 # tests/utils/test_identifiable.py
+from typing import Optional
 import pytest
 from pydantic import ValidationError
 from utils.base_model import ImmutableModel
@@ -18,7 +19,7 @@ class NamedIdentifiable(ImmutableModel, Identifiable):
 
 class OptionalNameIdentifiable(ImmutableModel, Identifiable):
     """Test class with optional name field."""
-    name: str = None
+    name: Optional[str] = None  # This makes it properly optional
     code: int
 
 

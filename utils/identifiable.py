@@ -25,22 +25,16 @@ class Identifiable(BaseModel):
 
     @classmethod
     def create_id(cls, prefix: str = "", name: Optional[str] = None) -> str:
-        """
-        Create a unique ID with optional prefix and name-based component.
-
-        Args:
-            prefix: Optional string prefix for the ID
-            name: Optional name to incorporate into the ID
-
-        Returns:
-            A unique string ID
-        """
+        """Create a unique ID with optional prefix and name-based component."""
         # Create base from name if provided, otherwise use class name
         if name:
             # Convert to lowercase, replace spaces with underscores
             base = name.lower().replace(' ', '_')
             # Remove any special characters
             base = ''.join(c for c in base if c.isalnum() or c == '_')
+            # Replace multiple consecutive underscores with a single one
+            while '__' in base:
+                base = base.replace('__', '_')
         else:
             base = cls.__name__.lower()
 
