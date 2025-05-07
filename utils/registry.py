@@ -2,7 +2,7 @@
 from typing import TypeVar
 from pydantic import BaseModel
 import uuid
-from weakref import WeakKeyDictionary
+from weakref import WeakKeyDictionary, WeakValueDictionary
 from copy import deepcopy
 
 
@@ -34,7 +34,7 @@ class ChangeCommand:
 class Registry:
     def __init__(self):
         self.object_ids = WeakKeyDictionary()  # object -> id
-        self.id_objects = {}  # id -> object
+        self.id_objects = WeakValueDictionary()  # id -> object
 
         # Command history for undo/redo
         self.commands = []
