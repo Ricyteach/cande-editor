@@ -75,12 +75,6 @@ class TestPoint:
         assert Point(x=1.0, y=1.0).polar_angle() == pytest.approx(math.pi / 4)
         assert Point(x=-1.0, y=1.0).polar_angle() == pytest.approx(3 * math.pi / 4)
 
-    def test_immutability(self):
-        p = Point(x=1.0, y=2.0)
-
-        with pytest.raises(Exception):
-            p.x = 3.0  # Should not be able to modify after creation
-
     def test_string_representation(self):
         p = Point(x=1.0, y=2.0)
         assert str(p) == "(1.0, 2.0)"

@@ -1,10 +1,10 @@
 # domain/parameters.py
 from typing import Dict, Optional
-from utils.base_model import ImmutableModel
+from utils.registry import RegisteredModel
 from pydantic import Field
 
 
-class Parameter(ImmutableModel):
+class Parameter(RegisteredModel):
     """A parameter with a value and optional unit.
 
     This is the fundamental building block for storing numerical values
@@ -15,7 +15,7 @@ class Parameter(ImmutableModel):
     unit: Optional[str] = Field(default=None, description="Unit string (e.g., 'kPa', 'm', 'degrees')")
 
 
-class ModelParameters(ImmutableModel):
+class ModelParameters(RegisteredModel):
     """Container for model parameters.
 
     Each parameter can have its own unit. Parameters are accessed by name

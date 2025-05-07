@@ -5,11 +5,10 @@ from pydantic import Field, model_validator
 
 from domain.core.constitutive.structural import StructuralModel
 from domain.core.materials import StructuralMaterial
-from utils.base_model import ImmutableModel
-from utils.identifiable import Identifiable
+from utils.registry import RegisteredModel
 
 
-class StructuralSegment(ImmutableModel, Identifiable):
+class StructuralSegment(RegisteredModel):
     """Base class for all structural segments."""
     name: Optional[str] = Field(default=None, description="Human-readable name")
     material: StructuralMaterial = Field(description="Physical structural material")

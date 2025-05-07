@@ -1,10 +1,10 @@
 from typing import Optional
 from pydantic import Field
 from domain.core.parameters import ModelParameters
-from utils.base_model import ImmutableModel
+from utils.registry import RegisteredModel
 
 
-class StructuralModel(ImmutableModel):
+class StructuralModel(RegisteredModel):
     """
     Base class for structural behavior models.
 

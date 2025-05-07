@@ -23,13 +23,6 @@ class TestResistanceFactor:
         with pytest.raises(ValueError):
             ResistanceFactor(value=1.1)
 
-    def test_immutability(self):
-        """Test that resistance factors are immutable."""
-        factor = ResistanceFactor(value=0.9)
-
-        with pytest.raises(Exception):
-            factor.value = 0.8
-
 
 class TestResistanceFactors:
     def test_create_resistance_factors(self):

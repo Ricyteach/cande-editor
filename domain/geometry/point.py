@@ -2,10 +2,10 @@
 from pydantic import Field, field_validator
 import math
 from domain.geometry.constants import EPSILON
-from utils.base_model import ImmutableModel
+from utils.registry import RegisteredModel
 
 
-class Point(ImmutableModel):
+class Point(RegisteredModel):
     """
     Represents a 2D point in Cartesian coordinates.
 

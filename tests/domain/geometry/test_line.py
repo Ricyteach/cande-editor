@@ -179,15 +179,6 @@ class TestLine:
         line4 = Line(start=Point(x=0.0, y=0.0), end=Point(x=0.0, y=1.0))
         assert not line1.is_parallel(line4)
 
-    def test_immutability(self):
-        line = Line(
-            start=Point(x=0.0, y=0.0),
-            end=Point(x=1.0, y=1.0)
-        )
-
-        with pytest.raises(Exception):
-            line.start = Point(x=2.0, y=2.0)
-
     def test_string_representation(self):
         line = Line(
             start=Point(x=0.0, y=0.0),

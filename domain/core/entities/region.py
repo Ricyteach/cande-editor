@@ -1,14 +1,12 @@
 from typing import Optional
 from pydantic import Field, model_validator
 from domain.geometry.polygon import Polygon
-from utils.base_model import ImmutableModel
-from utils.identifiable import Identifiable
-from domain.core.materials import SoilMaterial, StructuralMaterial
+from utils.registry import RegisteredModel
+from domain.core.materials import SoilMaterial
 from domain.core.constitutive.soil import SoilModel
-from domain.core.constitutive.structural import StructuralModel
 
 
-class Region(ImmutableModel, Identifiable):
+class Region(RegisteredModel):
     """Represents a soil region."""
     name: Optional[str] = Field(default=None, description="Human-readable name")
     geometry: Polygon = Field(description="Shape of the region")

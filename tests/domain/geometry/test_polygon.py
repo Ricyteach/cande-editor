@@ -174,18 +174,6 @@ class TestPolygon:
         with pytest.raises(ValueError):
             Polygon(vertices=vertices)
 
-    def test_immutability(self):
-        vertices = [
-            Point(x=0.0, y=0.0),
-            Point(x=1.0, y=0.0),
-            Point(x=1.0, y=1.0),
-            Point(x=0.0, y=1.0)
-        ]
-        polygon = Polygon(vertices=vertices)
-
-        with pytest.raises(Exception):
-            polygon.vertices = []
-
     def test_string_representation(self):
         vertices = [
             Point(x=0.0, y=0.0),

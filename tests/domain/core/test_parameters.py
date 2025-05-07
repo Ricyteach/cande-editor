@@ -18,16 +18,6 @@ class TestParameter:
         assert param.value == 0.3
         assert param.unit is None
 
-    def test_parameter_immutability(self):
-        """Test that Parameter is immutable."""
-        param = Parameter(value=100.0, unit="kPa")
-
-        with pytest.raises(Exception):
-            param.value = 200.0
-
-        with pytest.raises(Exception):
-            param.unit = "MPa"
-
     def test_parameter_serialization(self):
         """Test Parameter serialization."""
         param = Parameter(value=100.0, unit="kPa")
@@ -105,18 +95,6 @@ class TestModelParameters:
 
         assert params.get_value("K") == 1000
         assert params.get_parameter("K").unit is None
-
-    def test_model_parameters_immutability(self):
-        """Test that ModelParameters is immutable."""
-        params = ModelParameters(parameters={
-            "K": Parameter(value=1000, unit="psi")
-        })
-
-        with pytest.raises(Exception):
-            params.parameters["K"] = Parameter(value=2000, unit="psi")
-
-        with pytest.raises(Exception):
-            params.parameters["new"] = Parameter(value=100)
 
     def test_model_parameters_serialization(self):
         """Test ModelParameters serialization."""

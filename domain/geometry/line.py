@@ -3,10 +3,10 @@ from pydantic import Field, field_validator, model_validator
 import math
 from domain.geometry.point import Point
 from domain.geometry.constants import EPSILON
-from utils.base_model import ImmutableModel
+from utils.registry import RegisteredModel
 
 
-class Line(ImmutableModel):
+class Line(RegisteredModel):
     """
     Represents a line segment defined by two points.
 

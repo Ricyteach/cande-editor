@@ -1,11 +1,11 @@
 from typing import Optional
 from pydantic import Field, field_validator, model_validator
 from utils.constants import WATER_UNIT_WEIGHT
-from utils.base_model import ImmutableModel
+from utils.registry import RegisteredModel
 from domain.core.resistance_factors import ResistanceFactors
 
 
-class SoilMaterial(ImmutableModel):
+class SoilMaterial(RegisteredModel):
     """
     Represents physical properties of soil material.
 
@@ -59,7 +59,7 @@ class SoilMaterial(ImmutableModel):
         return self.saturated_unit_weight - WATER_UNIT_WEIGHT
 
 
-class StructuralMaterial(ImmutableModel):
+class StructuralMaterial(RegisteredModel):
     """
     Base class for structural materials.
 

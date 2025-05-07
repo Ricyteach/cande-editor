@@ -2,10 +2,10 @@
 
 from typing import Dict, Optional
 from pydantic import Field, field_validator
-from utils.base_model import ImmutableModel
+from utils.registry import RegisteredModel
 
 
-class ResistanceFactor(ImmutableModel):
+class ResistanceFactor(RegisteredModel):
     """
     Represents a resistance factor for LRFD design.
 
@@ -24,7 +24,7 @@ class ResistanceFactor(ImmutableModel):
         return v
 
 
-class ResistanceFactors(ImmutableModel):
+class ResistanceFactors(RegisteredModel):
     """
     Container for resistance factors used in LRFD design.
 

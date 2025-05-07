@@ -2,22 +2,22 @@
 from typing import Optional
 import pytest
 from pydantic import ValidationError
-from utils.base_model import ImmutableModel
+from utils.registry import RegisteredModel
 from utils.identifiable import Identifiable
 
 
-class SimpleIdentifiable(ImmutableModel, Identifiable):
+class SimpleIdentifiable(RegisteredModel, Identifiable):
     """Simple test class implementing Identifiable."""
     value: str
 
 
-class NamedIdentifiable(ImmutableModel, Identifiable):
+class NamedIdentifiable(RegisteredModel, Identifiable):
     """Test class with name field."""
     name: str
     description: str
 
 
-class OptionalNameIdentifiable(ImmutableModel, Identifiable):
+class OptionalNameIdentifiable(RegisteredModel, Identifiable):
     """Test class with optional name field."""
     name: Optional[str] = None  # This makes it properly optional
     code: int
@@ -121,32 +121,3 @@ class TestIdentifiable:
         id1 = SimpleIdentifiable.create_id(name="Test! @#$% Object")
         assert "test_object" in id1
         assert "!@#$%" not in id1
-
-    def test_immutability(self):
-        """Test that identifiable objects remain immutable."""
-        model = SimpleIdentifiable.create(value="test")
-
-        # Should not be able to change ID
-        with pytest.raises(Exception):
-            model.id = "new_id"
-
-        # Should not be able to change other fields
-        with pytest.raises(Exception):
-            model.value = "new_value"
-
-    def test_with_changes(self):
-        """Test with_changes method maintains ID."""
-        model = NamedIdentifiable.create(name="Original", description="First")
-        original_id = model.id
-
-        # Change other fields but not ID
-        modified = model.with_changes(name="Modified", description="Updated")
-
-        # ID should be preserved
-        assert modified.id == original_id
-        assert modified.name == "Modified"
-        assert modified.description == "Updated"
-
-        # Original should be unchanged
-        assert model.name == "Original"
-        assert model.description == "First"

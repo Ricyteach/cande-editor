@@ -3,10 +3,10 @@ from pydantic import Field, field_validator, model_validator
 from domain.geometry.point import Point
 from domain.geometry.line import Line
 from domain.geometry.constants import EPSILON
-from utils.base_model import ImmutableModel
+from utils.registry import RegisteredModel
 
 
-class Polygon(ImmutableModel):
+class Polygon(RegisteredModel):
     """
     Represents a closed polygon defined by a sequence of vertices.
 
