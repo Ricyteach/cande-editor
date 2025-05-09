@@ -7,7 +7,7 @@ from enum import Enum, auto
 import logging
 
 from models.cande_model import CandeModel
-from models.element import Element1D
+from models.element import Element1D, InterfaceElement
 from views.main_window import MainWindow
 from views.canvas_view import CanvasView, DisplayMode
 
