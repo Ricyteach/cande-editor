@@ -50,6 +50,31 @@ def rule_terminator(problem: Problem) -> Iterator[Finding]:
         )
 
 
+def rule_field_decoding(problem: Problem) -> Iterator[Finding]:
+    """Every field must contain what its column table says it contains.
+
+    Reported rather than silently defaulted: a stray character in a numeric
+    column is exactly the kind of thing that makes CANDE fail with an unhelpful
+    message, and the engineer needs to be told which line and which field.
+    """
+    reported = 0
+    for index, record in problem.document.records():
+        for name, reason in record.malformed():
+            if reported >= 25:
+                yield _error(
+                    "field-decoding",
+                    "Further malformed fields were found but not listed.",
+                )
+                return
+            reported += 1
+            yield _error(
+                "field-decoding",
+                f"{record.name} field {name!r} contains {reason}.",
+                entity=record.name,
+                index=index,
+            )
+
+
 def rule_undefined_nodes(problem: Problem) -> Iterator[Finding]:
     """Every node an element references must exist, or be Laplace-generated."""
     defined = problem.nodes.keys()
@@ -550,6 +575,7 @@ def rule_load_scaling_note(problem: Problem) -> Iterator[Finding]:
 
 RULES: tuple[Rule, ...] = (
     rule_terminator,
+    rule_field_decoding,
     rule_undefined_nodes,
     rule_orphan_nodes,
     rule_coincident_nodes,

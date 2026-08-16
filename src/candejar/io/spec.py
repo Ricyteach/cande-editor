@@ -23,6 +23,7 @@ from typing import Protocol, runtime_checkable
 
 __all__ = [
     "Field",
+    "FieldDecodeError",
     "FieldKind",
     "LineSpec",
     "Real",
@@ -31,6 +32,20 @@ __all__ = [
     "Whole",
     "format_real",
 ]
+
+
+class FieldDecodeError(ValueError):
+    """A field's text does not match the type its spec declares.
+
+    Raised rather than swallowed so the problem can be reported against the
+    offending field instead of silently becoming a default value.  Real files
+    do contain junk, and the engineer needs to be told which column it is in.
+    """
+
+    def __init__(self, text: str, kind: str) -> None:
+        super().__init__(f"{text.strip()!r}, which is not {kind}")
+        self.text = text
+        self.kind = kind
 
 
 class Source(Enum):
@@ -75,7 +90,10 @@ class Whole:
         stripped = text.strip()
         if not stripped:
             return None
-        return int(stripped)
+        try:
+            return int(stripped)
+        except ValueError:
+            raise FieldDecodeError(text, "a whole number") from None
 
     def encode(self, value: object, width: int) -> str:
         if value is None:
@@ -93,7 +111,10 @@ class Real:
         stripped = text.strip()
         if not stripped:
             return None
-        return float(stripped)
+        try:
+            return float(stripped)
+        except ValueError:
+            raise FieldDecodeError(text, "a number") from None
 
     def encode(self, value: object, width: int) -> str:
         if value is None:

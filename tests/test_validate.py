@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from candejar.io import loads
 from candejar.model import Problem
 from candejar.validate import Severity, run_rules
@@ -279,3 +281,50 @@ class TestOrdering:
         )
         ranks = [f.severity.rank for f in run_rules(problem)]
         assert ranks == sorted(ranks)
+
+
+class TestMalformedInput:
+    """Nothing may crash the reader. A bad file must produce findings."""
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            b"",
+            b"not a cande file at all\r\n",
+            b"STOP\r\n",
+            b"\xff\xfe\x00\x01binary\x00",
+            b"                   C-3.L3!!    1  000       xyz       abc\r\nSTOP\r\n",
+        ],
+        ids=["empty", "prose", "only-stop", "binary", "junk-in-numeric-fields"],
+    )
+    def test_reads_without_raising(self, tmp_path: Path, content: bytes) -> None:
+        path = tmp_path / "rough.cid"
+        path.write_bytes(content)
+        run_rules(Problem.read(str(path)))  # must not raise
+
+    def test_a_malformed_field_is_reported_by_name(self, tmp_path: Path) -> None:
+        path = tmp_path / "rough.cid"
+        record = "    1  000       xyz     56.81"
+        path.write_bytes(f"{'C-3.L3':>25}!!{record}\r\nSTOP\r\n".encode("latin-1"))
+        findings = [f for f in run_rules(Problem.read(str(path))) if f.rule == "field-decoding"]
+        assert findings
+        assert "'x'" in findings[0].message
+        assert "not a number" in findings[0].message
+        assert findings[0].index == 0
+
+    def test_a_malformed_field_does_not_poison_its_neighbours(self, tmp_path: Path) -> None:
+        """Only the bad field is lost; the rest of the record still reads."""
+        path = tmp_path / "rough.cid"
+        record = "    7  000       xyz     56.81"
+        path.write_bytes(f"{'C-3.L3':>25}!!{record}\r\nSTOP\r\n".encode("latin-1"))
+        node = Problem.read(str(path)).nodes[7]
+        assert node.y == 56.81
+        assert node.x == 0.0  # the unusable field falls back, and is reported
+
+    def test_a_truncated_file_still_round_trips(self, tmp_path: Path, cid_path: Path) -> None:
+        from candejar.io import dumps, read_cid
+
+        truncated = cid_path.read_bytes()[:4000]
+        path = tmp_path / "truncated.cid"
+        path.write_bytes(truncated)
+        assert dumps(read_cid(path)).encode("latin-1") == truncated

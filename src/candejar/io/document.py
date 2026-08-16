@@ -19,7 +19,7 @@ from pathlib import Path
 
 from candejar.io.line import TERMINATOR, CommandLine, join_line, split_line
 from candejar.io.registry import spec_for
-from candejar.io.spec import LineSpec
+from candejar.io.spec import FieldDecodeError, LineSpec
 
 __all__ = [
     "Document",
@@ -70,16 +70,39 @@ class Record:
         return spec_field.kind.decode(self.raw(name))
 
     def int_at(self, name: str) -> int | None:
-        value = self.get(name)
+        """The field as an integer, or ``None`` if blank or undecodable.
+
+        Tolerant on purpose: a malformed field must not stop the file being
+        read.  Use :meth:`malformed` to find out which fields were unusable.
+        """
+        try:
+            value = self.get(name)
+        except FieldDecodeError:
+            return None
         return None if value is None else int(value)  # type: ignore[call-overload]
 
     def float_at(self, name: str) -> float | None:
-        value = self.get(name)
+        """The field as a float, or ``None`` if blank or undecodable."""
+        try:
+            value = self.get(name)
+        except FieldDecodeError:
+            return None
         return None if value is None else float(value)  # type: ignore[arg-type]
 
     def str_at(self, name: str) -> str | None:
-        value = self.get(name)
+        try:
+            value = self.get(name)
+        except FieldDecodeError:
+            return self.raw(name).strip() or None
         return None if value is None else str(value)
+
+    def malformed(self) -> Iterator[tuple[str, str]]:
+        """Yield ``(field name, reason)`` for every field that will not decode."""
+        for spec_field in self.spec.fields:
+            try:
+                spec_field.kind.decode(self.raw(spec_field.name))
+            except FieldDecodeError as error:
+                yield spec_field.name, str(error)
 
     def set(self, name: str, value: object) -> Record:
         """Return a copy with one field replaced.
