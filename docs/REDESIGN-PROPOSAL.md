@@ -4,6 +4,13 @@
 **Author:** drafted for Rick Teachey
 **Scope:** replaces `cande-editor` v2.0 in its entirety
 
+> **Update — format now verified.** The CANDE-2013 User Manual and a real 2,433-line
+> Level 3 file have been read. The `.cid` format is pinned in
+> [`docs/CID-FORMAT.md`](CID-FORMAT.md); the illustrative column table in §4.2 below has
+> been replaced with the verified one, and §1.5 records the extra defects that came out of
+> the comparison. Nothing in the architecture changed — the codec turned out to be
+> *simpler* than assumed.
+
 *"Strata" is a suggested working name — CANDE's central idea is incremental
 construction in layers, which is also how the software should be built. Rename
 freely.*
@@ -131,7 +138,29 @@ real key. Top-level packages named `models`, `views`, `utils`, and `controllers`
 will collide with anything else installed. `requires-python = ">=3.12"` while the
 README says 3.6.
 
-### 1.4 The instinct in the newest commits is right
+### 1.4 Further defects, confirmed against the real format
+
+Reading the manual and a real file surfaced four more, all of them consequences of
+the same root cause. Detail and evidence in [`docs/CID-FORMAT.md`](CID-FORMAT.md) §8.
+
+- **Interface material definitions are duplicated on save.** The save path
+  renumbers every interface element from material ID 1 and emits a fresh
+  `D-1`/`D-2` pair per unique (friction, angle), then *inserts* them after the
+  existing `D-1` block without removing the originals. The sample file already has
+  19 interface materials; saving it would append a second, conflicting set
+  numbered 1…19.
+- **Link elements are invisible.** `ELEMENT_CLASS_DICT` knows only `{0: None,
+  1: Interface}`. CANDE-2013 added link elements with `IX(7)` codes 8, 9, 10 and
+  11. A link has two nonzero nodes, so it is parsed as a beam — and then becomes
+  eligible for interface insertion, which is meaningless for a link.
+- **The tensile-force / gap field is dropped.** `D-2.Interface` carries angle,
+  friction, tensile force and gap distance. The parser reads two of the four and
+  the writer emits two. The real file has the third field populated.
+- **Element death cannot be represented.** `IX(6)` is the *birth* load step. Link
+  elements also have a death step — that is how CANDE models removing temporary
+  supports, excavation, and void creation. Nothing in the data model can hold it.
+
+### 1.5 The instinct in the newest commits is right
 
 The most recent work — `utils/copyable.py`'s `ImmutableCopyable.with_changes()`,
 and the `EntityReferenceContainer` sketch — is reaching for exactly the right
@@ -307,28 +336,32 @@ Rather than constants scattered across modules and regexes duplicated between
 parse and save, each line type is a table:
 
 ```python
+# Every line is exactly: f"{name:>25}!!" + fixed-column record.
+# Columns below are 1-based within the record, per the User Manual.
 LINE_TYPES["C-4.L3"] = LineSpec(
-    prefix="C-4.L3",
+    name="C-4.L3",
     fields=[
-        Field("element",  col=24, width=5, kind=Int),
-        Field("i",        col=29, width=5, kind=Int),
-        Field("j",        col=34, width=5, kind=Int),
-        Field("k",        col=39, width=5, kind=Int),
-        Field("l",        col=44, width=5, kind=Int),
-        Field("material", col=49, width=5, kind=Int),
-        Field("step",     col=54, width=5, kind=Int),
-        Field("kind",     col=59, width=5, kind=Int, default=0),
+        Field("limit",    cols=(1, 1),   kind=A1),   # blank, or "L" on the last line
+        Field("element",  cols=(2, 5),   kind=I4),
+        Field("i",        cols=(6, 10),  kind=I5),
+        Field("j",        cols=(11, 15), kind=I5),
+        Field("k",        cols=(16, 20), kind=I5),
+        Field("l",        cols=(21, 25), kind=I5),
+        Field("material", cols=(26, 30), kind=I5),
+        Field("birth",    cols=(31, 35), kind=I5),
+        Field("code",     cols=(36, 40), kind=I5, default=0),
     ],
 )
 ```
 
-*(Column positions above are illustrative — they get pinned against the manual and
-a corpus of real files in Phase 1.)*
+**This is now verified, not illustrative.** Every command line in a `.cid` file is
+`{command_name:>25}!!` followed by a fixed-column record starting at absolute
+column 28 — confirmed on 2,432 of 2,432 lines in a real file, with the manual's
+column tables decoding it exactly. See [`docs/CID-FORMAT.md`](CID-FORMAT.md).
 
-The reader and the writer are both generated from this. Adding the remaining ~35
-line types becomes data entry with a test each, not new code. The spec is
-versioned, so CANDE-2007 / 2019 / 2022 differences are a table variant rather
-than a fork.
+The reader and the writer are both generated from this. Adding the remaining line
+types becomes data entry with a test each, not new code. The spec is versioned, so
+CANDE-2007 / 2013 / 2024 differences are a table variant rather than a fork.
 
 **(b) Unknown lines round-trip verbatim.**
 Any line the codec doesn't yet understand becomes an ordered `RawLine` in the
@@ -453,16 +486,38 @@ at the end of Phase 1, about a month in.
 
 ## 8. What I need from you
 
-1. **A corpus of real `.cid` files** — 15–30 of them, spanning box/pipe/arch,
-   concrete/steel/plastic, Level 2 and Level 3, LRFD and service, ideally
-   including a few that CANDE rejected. This is the single highest-leverage
-   thing; the codec's correctness is defined by it.
-2. **The CANDE-2022 User Manual PDF** (and the Solution Methods volume if you
-   have it) — the site is blocked from this environment. Column positions and the
-   line-type catalogue come from it.
+Items 1 and 2 are **received** — OneDrive access supplied the CANDE-2013 User
+Manual, the CANDE-2024 Solution Methods manual, and a large set of real project
+files. What remains:
+
+1. **A `.cid` MIME workaround.** The connector refuses `.cid` (SharePoint reports
+   `application/octet-stream`, which is not on its allow-list). Copying a file and
+   renaming it `.cid.txt` works — one is staged in `OneDrive/_claude_cid_readable/`
+   as a proof. For a real corpus, the cleanest fix is a folder of `.txt` copies, or
+   committing a handful of anonymised files into the repo as test fixtures. **The
+   repo is the better home** — the corpus belongs under version control next to the
+   round-trip tests.
+2. **Spread in the corpus.** The files seen so far are large Level 3 plastic models.
+   The codec needs coverage of the other pipe types (concrete, steel, aluminum,
+   CONRIB, CONTUBE), Level 1 and Level 2 (including the `CX-*` extended lines),
+   LRFD files with `E-1`, and models using link elements — plus a few CANDE
+   rejected, since those pin down the validation rules.
 3. **Three decisions:**
    - Qt desktop as recommended, or web?
    - Level 3 only at first, or Level 1/2 in the model from the start?
    - Is this a personal tool, or something you intend to release?
 4. **Whether to start.** If yes, Phase 0 + Phase 1 is the smallest slice that
    proves the architecture, and it's independently useful.
+
+## 9. Two findings that make the later phases cheaper
+
+- **Output is already partly XML.** Runs emit `_MeshGeom.xml`, `_MeshResults.xml`
+  and `_BeamResults.xml` alongside the text report, `PLOT1.DAT`, `PLOT2.dat` and
+  NCHRP Process 12-50 results — all documented in User Manual §7.1. Phase 5 does
+  not need to scrape the `.out` report.
+- **CANDE-2024 ships `CANDE_DLL.dll`.** If the solver is callable in-process rather
+  than only as an executable, batch runs and parametric sweeps get materially
+  faster and more controllable. Worth a spike early in Phase 5.
+- **CANDE can import NASTRAN** (`GRID`, `CBAR`, `CTRIA3`, `CQUAD4`, `CGAP`, `SPC`,
+  `FORCE`; User Manual §7.2). Writing `.cid` Level 3 directly is still preferable,
+  but this is a useful fallback and a compatibility target for Phase 4.
