@@ -1,135 +1,86 @@
-# CANDE Input File Editor
+# candejar
 
-A GUI tool for editing CANDE input files (.cid), specifically for selecting and modifying element material and step numbers, as well as creating and managing interface elements.
+A CANDE preprocessor core — reads, validates and writes CANDE `.cid` input files.
 
-## Features
+CANDE (Culvert ANalysis and DEsign) is the FHWA/NCHRP finite element program for
+buried structures. Its own 2025 User Manual states that the official GUI "has not
+been fully updated for the new capabilities," and that using any capability added
+since 2011 "requires" hand-editing the fixed-column input file. That covers the
+Mohr/Coulomb soil model, the modified Duncan/Selig unload model, Continuous Load
+Scaling, composite and death-option link elements, full pavement benefits for load
+rating, and the April-2025 thermoplastic design criteria.
 
-- Load and save CANDE input files (.cid)
-- Visualize soil elements with color coding based on material or step number
-- Select elements by clicking, dragging, or filtering by material/step
-- Modify material and step numbers for selected elements
-- Create interface elements between beam elements and soil elements
-- Specify friction coefficients and orientations for interface elements
-- Filter element display by type (1D, 2D, Interface)
-- Pan and zoom for easy navigation
+`candejar` exists to close that gap.
 
-## Requirements
+> **Status: pre-alpha.** Phase 0 (foundations) is complete: package layout, a real
+> test corpus, and the line envelope. The codec, domain model and validation rules
+> are Phase 1 and Phase 2. See [`docs/REDESIGN-PROPOSAL.md`](docs/REDESIGN-PROPOSAL.md)
+> for the plan and [`docs/CID-FORMAT.md`](docs/CID-FORMAT.md) for the verified format.
 
-- Python 3.6 or higher
-- Tkinter (usually included with Python)
+## The format, in one line
 
-## Installation
+Every command line in a `.cid` file has exactly one shape:
 
-1. Clone or download this repository
-2. Navigate to the project directory
-3. Run `python main.py` to start the application
-
-## Usage
-
-### Opening a File
-
-Click the "Open File" button or press Ctrl+O to open a CANDE input file (.cid).
-
-### Navigating the View
-
-- **Pan**: Middle-click or right-click and drag
-- **Zoom**: Use the mouse wheel
-- **Zoom to Fit**: Automatically done when opening a file
-
-### Selecting Elements
-
-- **Single Element**: Click on an element to select it
-- **Multiple Elements**: 
-  - Ctrl+Click to add elements to the selection
-  - Shift+Click to remove elements from the selection
-  - Drag from left to right to select elements completely inside the box
-  - Drag from right to left to select elements touching the box
-- **Clear Selection**: Press Escape or click in an empty area
-
-### Filtering Elements
-
-- **By Material**: Enter a material number and click "Select by Material"
-- **By Step**: Enter a step number and click "Select by Step"
-- **By Element Type**: Use the checkboxes to show/hide 1D, 2D, and Interface elements
-  - Multiple element types can be shown simultaneously
-
-### Modifying Elements
-
-1. Select the elements you want to modify
-2. Enter the new material and/or step number
-3. Click "Assign to Selection"
-
-### Creating Interface Elements
-
-1. Select the beam elements that you want to create interfaces for
-2. Enter the desired friction coefficient (0.0 - 1.0)
-3. Click "Create Interfaces"
-4. Interface elements will be created at shared nodes between beams
-5. The interface orientation will be automatically calculated based on beam geometry
-
-### Working with Interface Elements
-
-- Interface elements are displayed as diamond shapes
-- Interface elements with the same friction coefficient will have the same color
-- The red arrow shows the direction of the normal force
-- The dashed green line indicates the interface plane
-- The label shows the friction material ID and orientation angle, and are color-coded by friction value
-- Interface elements are automatically assigned unique material types in the CANDE file
-- **Creating Interfaces**: Select beam elements, set the desired friction value, and click "Create Interfaces"
-
-For detailed instructions on creating and working with interface elements, see the [Interface Element Creation Guide](docs/INTERFACE_GUIDE.md).
-
-### Display Mode
-
-Use the "Display" dropdown to toggle between coloring elements by:
-- Material Number
-- Step Number
-
-### Line Width Control
-
-Use the "1D Element Width" slider to adjust the display thickness of beam elements.
-
-### Saving Changes
-
-Click the "Save File" button or press Ctrl+S to save your changes to a CANDE input file.
-
-## Project Structure
-
-```
-cande-editor/
-├── main.py                  # Main entry point
-├── models/                  # Data models
-│   ├── init.py
-│   ├── node.py              # Node model
-│   ├── element.py           # Element models (1D/2D/Interface)
-│   └── cande_model.py       # Main model for CANDE data
-├── views/                   # UI components
-│   ├── init.py
-│   ├── main_window.py       # Main application window
-│   └── canvas_view.py       # Canvas rendering
-├── controllers/             # Application logic
-│   ├── init.py
-│   └── cande_controller.py  # Main controller
-└── utils/                   # Utilities
-├── init.py
-└── constants.py         # Application constants
+```python
+f"{command_name:>25}!!" + fixed_column_record
 ```
 
-## Key Bindings
+The command name is right-justified in 25 characters; the data record always begins
+at column 28. Verified against the CANDE-2025 User Manual and against every command
+line of two real files of very different shape. That single rule is why a
+declarative field spec can drive both the reader and the writer, rather than
+scattered column constants and duplicated regexes.
 
-- **Ctrl+O**: Open file
-- **Ctrl+S**: Save file
-- **Ctrl+Click**: Add to selection
-- **Shift+Click**: Remove from selection
-- **Escape**: Clear selection
-- **Mouse Wheel**: Zoom in/out
-- **Middle-Click Drag**: Pan view
-- **Right-Click Drag**: Pan view (alternative)
+```python
+from candejar.io import split_line
 
-## Contributing
+line = split_line("                   C-4.L3!!    1  687   42    0    0    7    1    0")
+line.name              # 'C-4.L3'
+line.field(26, 30)     # '    7'   material number
+line.field(31, 35)     # '    1'   birth load step
+```
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+## Layout
+
+```
+src/candejar/
+├── io/          fixed-column codec — reader and writer from one field spec
+├── model/       typed domain model                          (Phase 1)
+└── validate/    rules that run before CANDE does            (Phase 2)
+tests/fixtures/  real .cid files, scrubbed — the corpus correctness is defined by
+docs/            the proposal, and the verified format notes
+legacy/          the previous Tkinter editor, kept runnable during the rewrite
+```
+
+Mesh generation, solver integration, parametric studies and the full application
+live in the separate, proprietary `candejar_pro` distribution. The boundary is
+deliberate and is explained in [§4.6 of the proposal](docs/REDESIGN-PROPOSAL.md).
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+pytest
+ruff check .
+mypy
+```
+
+Python 3.12+.
+
+## The previous editor
+
+The Tkinter tool this replaces still runs:
+
+```bash
+cd legacy && python main.py
+```
+
+It is not maintained. Its known defects are catalogued in
+[§1 of the proposal](docs/REDESIGN-PROPOSAL.md) — the most consequential being that
+it creates every interface element twice, duplicates interface material definitions
+on save, and cannot see link elements, boundary conditions, or soil material
+definitions at all.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT — see [LICENSE](LICENSE).

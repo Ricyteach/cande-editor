@@ -1,8 +1,12 @@
-# Strata — a proposal to rebuild this into a real CANDE preprocessor
+# candejar — a proposal to rebuild this into a real CANDE preprocessor
 
-**Status:** proposal, not yet approved
+**Status:** approved — **Phase 0 complete**, Phase 1 next
 **Author:** drafted for Rick Teachey
 **Scope:** replaces `cande-editor` v2.0 in its entirety
+
+Decisions taken: web + CLI, no Qt (§4.4) · Levels 1, 2 and 3 from the start (§5) ·
+two deployments off one codebase, full preprocessor as a local install (§4.6) ·
+`candejar` open core / `candejar-pro` proprietary (§4.6) · `cande.kbjwgroup.com` (§4.5).
 
 > **Update — format verified against CANDE-2025.** The CANDE-2025 User Manual (April 2025,
 > which "supersedes all previous user manuals") and two structurally different real files
@@ -44,10 +48,6 @@ This is no longer a proposal to build a nicer editor. **The official preprocesso
 covering the program a decade ago, and the gap widens with each release.** A tool that
 simply parses the whole current format — before any mesh generation, before any of the
 ambitious parts — closes a gap that nothing else closes.
-
-*"Strata" is a suggested working name — CANDE's central idea is incremental
-construction in layers, which is also how the software should be built. Rename
-freely.*
 
 ---
 
@@ -112,9 +112,10 @@ copied through:
 | D-1, D-2.* | Soil materials: Isotropic, Orthotropic, Duncan / Duncan-Selig, Overburden, Extended Hardin, Interface, Composite Link | interface only |
 | D-3, D-4, E-* | Model-specific properties, load factors, step data | no |
 
-*(Exact catalogue to be pinned against the CANDE-2022 User Manual; the site was
-unreachable from this environment. The point stands regardless of the exact
-count.)*
+*(The catalogue is now pinned against the CANDE-2025 User Manual — see
+[`docs/CID-FORMAT.md`](CID-FORMAT.md) §2. Part B alone runs to `B-7` with `B-2b`,
+`B-2c`, `B-2d`, `B-3b` and `B-4b` sub-variants across seven pipe types, so "roughly
+forty" is if anything conservative.)*
 
 A tool that cannot read boundary conditions cannot tell you your model is
 under-restrained. A tool that cannot read `D-1` soil models cannot tell you that
@@ -273,7 +274,7 @@ severity, and — where it can be — is auto-fixable.
 ### 3.3 Semantic diff for `.cid` files
 
 ```
-$ strata diff before.cid after.cid
+$ candejar diff before.cid after.cid
   materials
     3  Duncan SW95 → SW90            (E_i 1450 → 1100 psi)
   elements
@@ -293,9 +294,9 @@ The Python API is the product; the GUI drives the same API the scripts do. Then 
 fill-height study is ten lines:
 
 ```python
-from strata import Project
+from candejar import Project
 
-base = Project.load("box_12x8.strata")
+base = Project.load("box_12x8.cdj.yml")
 for cover in range(2, 41, 2):
     m = base.with_cover(cover * ft)
     m.export_cid(f"runs/cover_{cover:02d}.cid")
@@ -341,27 +342,28 @@ manual node arithmetic.
 ### 4.1 Layers
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  strata.ui        PySide6 desktop app — renders, dispatches   │
-│  strata.cli       typer CLI: fmt, check, mesh, diff, run      │
-│                   (both are thin clients; neither owns state) │
-├──────────────────────────────────────────────────────────────┤
-│  strata.studies   parametric sweeps, batch runs               │
-│  strata.solve     CANDE runner, output parsing                │
-│  strata.validate  rule engine, findings, auto-fixes           │
-│  strata.mesh      generators, quality metrics, renumbering    │
-│  strata.ops       commands: assign, insert interfaces, split… │
-├──────────────────────────────────────────────────────────────┤
-│  strata.model     typed domain: Project, Structure, Mesh,     │
-│                   Materials, LoadSteps, BoundaryConditions    │
-├──────────────────────────────────────────────────────────────┤
-│  strata.io        fixed-column codec — reader + writer        │
-│                   driven by one declarative field spec        │
-└──────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│  web UI          one app, two deployments (§4.6):                 │
+│                  static WASM page · local install                 │
+│  candejar.cli    fmt · check · show · mesh · diff · run           │
+│                  (thin clients; neither owns state)               │
+├───────────────────────────────── candejar_pro ────────────────────┤
+│  studies         parametric sweeps, batch runs                    │
+│  solve           CANDE runner, output parsing                     │
+│  mesh            generators, quality metrics, renumbering         │
+├───────────────────────────────── candejar ─────────────────────────┤
+│  candejar.ops       commands: assign, insert interfaces, split…   │
+│  candejar.validate  rule engine, findings, auto-fixes             │
+│  candejar.model     typed domain: Project, Structure, Mesh,       │
+│                     Materials, LoadSteps, BoundaryConditions      │
+│  candejar.io        fixed-column codec — reader + writer,         │
+│                     driven by one declarative field spec          │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
-Nothing above `strata.model` touches a file. Nothing below `strata.ops` knows a
-UI exists.
+Nothing above `candejar.model` touches a file. Nothing below `candejar.ops` knows a
+UI exists. The `candejar` / `candejar_pro` line is the commercial boundary (§4.6);
+it is also the line above which nothing may ship to a browser.
 
 ### 4.2 The five load-bearing decisions
 
@@ -509,8 +511,8 @@ in-house work, with the option to sell it later.
 
 | Deployment | Contents | Audience |
 |---|---|---|
-| `cande.kbjwgroup.com` | static page, `strata-core` compiled to WASM | public, free, lead source |
-| `pip install strata-pro` | full web UI on `localhost` + CLI, talking to CANDE on the local machine | in-house now, potentially commercial later |
+| `cande.kbjwgroup.com` | static page, `candejar` compiled to WASM | public, free, lead source |
+| `pip install candejar-pro` | full web UI on `localhost` + CLI, talking to CANDE on the local machine | in-house now, potentially commercial later |
 
 This is how the full preprocessor gets built without a second UI and without Qt.
 It is also the right shape for a paid CANDE tool regardless: the solver runs on the
@@ -522,15 +524,15 @@ to fall exactly on the architecture boundary already in §4.1:
 
 | Layer | Package | Ships to browser | Licence |
 |---|---|---|---|
-| `io`, `model`, `validate` | `strata-core` | yes | permissive (MIT / Apache-2.0) |
-| `mesh`, `solve`, `studies`, full editor | `strata-pro` | **never** | proprietary, private repo |
+| `io`, `model`, `validate` | `candejar` | yes | permissive (MIT / Apache-2.0) |
+| `mesh`, `solve`, `studies`, full editor | `candejar_pro` | **never** | proprietary, private repo |
 
 Open-sourcing the core is right even commercially — the value is not in the parser,
 and a public codec buys credibility, bug reports, and other people's test files. The
-value is in generating meshes and closing the loop, and that stays in `strata-pro`.
+value is in generating meshes and closing the loop, and that stays in `candejar_pro`.
 
 **This is a Phase 0 decision, not a Phase 4 one.** The repository is MIT-licensed
-today; if `strata-pro` code lands in it, that is arguably released. Splitting the
+today; if `candejar_pro` code lands in it, that is arguably released. Splitting the
 packages at the start costs nothing. Retrofitting the split after a year of commits
 is genuinely painful.
 
@@ -542,7 +544,7 @@ Six phases. Each one ships something usable on its own; none of them requires th
 next one to justify itself.
 
 ### Phase 0 — Foundations *(~1 week)*
-`src/` layout, **the `strata-core` / `strata-pro` package split and licences
+`src/` layout, **the `candejar` / `candejar_pro` package split and licences
 settled** (§4.6), working `pyproject.toml`, pytest + ruff + mypy in CI, `.cid`
 test corpus assembled as fixtures. The current `tests/utils/…` file moves to
 `docs/notes/` where it belongs as the design sketch it is.
@@ -550,11 +552,11 @@ test corpus assembled as fixtures. The current `tests/utils/…` file moves to
 before any code depends on it being elsewhere.
 
 ### Phase 1 — Codec and model *(~3 weeks)*
-`strata.io` + `strata.model`. All line types the corpus exercises across **Levels 1,
+`candejar.io` + `candejar.model`. All line types the corpus exercises across **Levels 1,
 2 and 3** — including the canned-mesh families (`A-2.L12`, `C-1…C-4.L2.Pipe/Box/Arch`)
 and the `CX-1…CX-4` extended-Level-2 lines — with `RawLine` pass-through for the
-rest, byte-identical round-trip tests, and a CLI: `strata check`, `strata fmt`,
-`strata show`.
+rest, byte-identical round-trip tests, and a CLI: `candejar check`, `candejar fmt`,
+`candejar show`.
 **You get:** a library and CLI that already do something the stock tools don't —
 tell you what's wrong with a `.cid` before you run it. No UI needed.
 
@@ -563,10 +565,10 @@ are data entry. Worth it because a validator that accepts anything dropped on it
 a far better first impression than "unsupported file."*
 
 ### Phase 2 — Operations and validation *(~3 weeks)*
-`strata.ops` and `strata.validate`. Assign material/step, insert interface
+`candejar.ops` and `candejar.validate`. Assign material/step, insert interface
 elements **correctly** (with the duplicate-creation bug gone and the angle
 fallback made explicit), renumber, delete, mirror. Rule engine with severities
-and auto-fixes. `strata diff`.
+and auto-fixes. `candejar diff`.
 **You get:** batch editing and model checking from scripts; semantic diffs for QA.
 
 ### Phase 1.5 — Public validator *(~1.5 weeks)*
@@ -586,14 +588,14 @@ Feature parity with today's tool, plus everything Phases 1–2 added.
 whole file, and reachable from any machine without an install.
 
 ### Phase 4 — Mesh generation *(~6 weeks)*
-`strata.mesh`. Parametric structure library (box, circular, arch, 2R/3R, ellipse,
+`candejar.mesh`. Parametric structure library (box, circular, arch, 2R/3R, ellipse,
 custom polyline), installation geometry, automatic interface insertion, automatic
 load-step assignment, mesh quality metrics and refinement. AASHTO standard
 installation templates.
 **You get:** the headline feature — model from parameters, not from node lists.
 
 ### Phase 5 — Closing the loop *(~4 weeks)*
-`strata.solve` and `strata.studies`. Run CANDE, parse output, map results back
+`candejar.solve` and `candejar.studies`. Run CANDE, parse output, map results back
 onto the mesh, contour and diagram plots, LRFD D/C ratios, parametric sweeps and
 batch load rating.
 **You get:** the whole workflow in one place.
@@ -648,7 +650,7 @@ to 908 KB. That is enough to build the codec against. What remains:
    - Two deployments off one codebase; full preprocessor as a local install (§4.6).
    - `cande.kbjwgroup.com` (§4.5).
 4. **One decision left, and it belongs in Phase 0:** confirm the
-   `strata-core` (permissive) / `strata-pro` (proprietary) split, so the option to
+   `candejar` (permissive) / `candejar_pro` (proprietary) split, so the option to
    sell the full tool stays open. Everything else can be revised later; this one
    gets expensive to reverse.
 5. **Whether to start.** Phase 0 + Phase 1 is the smallest slice that proves the
