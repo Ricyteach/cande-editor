@@ -8,7 +8,7 @@ generation (Phase 4) and solver integration (Phase 5) are not built.
 
 Decisions taken: web + CLI, no Qt (§4.4) · Levels 1, 2 and 3 from the start (§5) ·
 two deployments off one codebase, full preprocessor as a local install (§4.6) ·
-`candejar` open core / `candejar-pro` proprietary (§4.6) · `cande.kbjwgroup.com` (§4.5).
+both packages proprietary from v0.1.0.dev0 (§4.6) · `cande.kbjwgroup.com` (§4.5).
 
 > **Update — format verified against CANDE-2025.** The CANDE-2025 User Manual (April 2025,
 > which "supersedes all previous user manuals") and two structurally different real files
@@ -526,16 +526,23 @@ to fall exactly on the architecture boundary already in §4.1:
 
 | Layer | Package | Ships to browser | Licence |
 |---|---|---|---|
-| `io`, `model`, `validate` | `candejar` | yes | permissive (MIT / Apache-2.0) |
-| `mesh`, `solve`, `studies`, full editor | `candejar_pro` | **never** | proprietary, private repo |
+| `io`, `model`, `validate` | `candejar` | yes | proprietary |
+| `mesh`, `solve`, `studies`, full editor | `candejar-pro` | **never** | proprietary |
 
-Open-sourcing the core is right even commercially — the value is not in the parser,
-and a public codec buys credibility, bug reports, and other people's test files. The
-value is in generating meshes and closing the loop, and that stays in `candejar_pro`.
+**Licensing: proprietary, all rights reserved, from v0.1.0.dev0 onward.** The
+repository was MIT-licensed through commit `052c005`; that grant stands for anyone
+who already received the code under it and cannot be withdrawn, but everything
+from the next commit is proprietary. The `Private :: Do Not Upload` classifier
+refuses an accidental `twine upload`.
 
-**This is a Phase 0 decision, not a Phase 4 one.** The repository is MIT-licensed
-today; if `candejar_pro` code lands in it, that is arguably released. Splitting the
-packages at the start costs nothing. Retrofitting the split after a year of commits
+This supersedes the earlier open-core plan. The argument for opening the codec was
+credibility and other people's bug reports; the argument against is that the option
+to sell the full tool is worth more than either, and a permissive licence on the
+parser makes the boundary harder to hold later. Nothing about the *package* split
+changes — it is still needed, because the browser build must not carry the mesh
+generator whatever its licence says.
+
+**The split remains a Phase 0 decision.** Retrofitting it after a year of commits
 is genuinely painful.
 
 ---

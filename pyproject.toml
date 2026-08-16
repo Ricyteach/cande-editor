@@ -9,10 +9,12 @@ description = "A CANDE preprocessor core: read, validate and write CANDE .cid in
 authors = [{ name = "Rick Teachey", email = "ricky@teachey.org" }]
 readme = "README.md"
 requires-python = ">=3.11"
-license = "MIT"
+license = "LicenseRef-Proprietary"
 license-files = ["LICENSE"]
 keywords = ["cande", "culvert", "buried structure", "finite element", "cid"]
 classifiers = [
+    # Refuses an accidental `twine upload`; this package is not for PyPI.
+    "Private :: Do Not Upload",
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3.11",

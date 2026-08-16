@@ -147,14 +147,16 @@ legacy/          the previous Tkinter editor, kept runnable during the rewrite
 ```
 
 Mesh generation, solver integration, parametric studies and the full application will live
-in the separate, proprietary `candejar-pro` distribution. The boundary is deliberate and is
-explained in [§4.6 of the proposal](docs/REDESIGN-PROPOSAL.md).
+in the separate `candejar-pro` distribution. Both are proprietary; the split exists because
+`candejar` is compiled to WebAssembly and shipped to the browser for the public validator,
+and anything shipped there can be extracted from it. See
+[§4.6 of the proposal](docs/REDESIGN-PROPOSAL.md).
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest          # 87 tests
+pytest          # 96 tests
 ruff check .
 mypy
 ```
@@ -175,4 +177,8 @@ node count when CANDE wants the highest node number.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+**Proprietary — all rights reserved.** See [LICENSE](LICENSE).
+
+Versions up to commit `052c005` were published under the MIT Licence; that grant
+stands for anyone who already has them. Everything from the following commit
+onward is proprietary.
