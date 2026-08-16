@@ -1,5 +1,25 @@
-"""Typed domain model for a CANDE problem.
+"""Typed domain model for a CANDE problem."""
 
-Populated in Phase 1.  Entities carry stable internal handles; the node and
-element *numbers* written to a ``.cid`` file are assigned at export time.
-"""
+from candejar.model.problem import (
+    Boundary,
+    ElementKind,
+    Extents,
+    Material,
+    MaterialModel,
+    Node,
+    PipeGroup,
+    Problem,
+    SoilElement,
+)
+
+__all__ = [
+    "Boundary",
+    "ElementKind",
+    "Extents",
+    "Material",
+    "MaterialModel",
+    "Node",
+    "PipeGroup",
+    "Problem",
+    "SoilElement",
+]
