@@ -172,7 +172,10 @@ _SPECS: tuple[LineSpec, ...] = (
                 "5 Hardin, 6 Interface, 7 Composite Link, 8 Mohr/Coulomb",
             ),
             _f("density", 11, 20, _REAL),
-            _f("name", 21, 40, _TEXT, "MATNAM plus free text"),
+            # MATNAM occupies the first five of these columns for the canned-soil
+            # models; the rest is free text.  Kept as one field until the manual
+            # page is read, because splitting it wrongly would mangle names.
+            _f("name", 21, 60, _TEXT, "MATNAM (first five columns) plus free text"),
         ),
     ),
     LineSpec(

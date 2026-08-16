@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candejar</title>
+<style>
+:root{
+  --ground:#EDEFEA; --surface:#F7F8F4; --sunk:#E3E7DE; --raised:#FFFFFF;
+  --ink:#161A16; --ink-2:#414B43; --muted:#68736A;
+  --rule:#D2D8CC; --rule-soft:#E4E8DE;
+  --accent:#1E5F52; --accent-soft:#DCE8E2; --accent-ink:#FFFFFF;
+  --error:#A8341F; --error-soft:#F6E2DD;
+  --warn:#8A6212; --warn-soft:#F5EBD6;
+  --note:#1E5F52; --note-soft:#DCE8E2;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono","Roboto Mono",Menlo,Consolas,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --ground:#101310; --surface:#171B17; --sunk:#1C211C; --raised:#1F251F;
+    --ink:#E7EBE3; --ink-2:#C0C8BC; --muted:#8E9B8E;
+    --rule:#2A312A; --rule-soft:#232923;
+    --accent:#57AB99; --accent-soft:#1B2C28; --accent-ink:#0B140F;
+    --error:#E08A72; --error-soft:#2E1C17;
+    --warn:#D9B166; --warn-soft:#2B2313;
+    --note:#57AB99; --note-soft:#1B2C28;
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--ground); color:var(--ink); font-family:var(--sans);
+  font-size:13.5px; line-height:1.5; overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ------------------------------------------------------------- shell */
+#app{display:grid;grid-template-columns:322px 1fr;height:100%}
+#app.empty{grid-template-columns:1fr}
+aside{
+  background:var(--surface);border-right:1px solid var(--rule);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+main{position:relative;overflow:hidden;background:var(--ground)}
+canvas{display:block;width:100%;height:100%;cursor:crosshair}
+
+/* ------------------------------------------------------------- header */
+.brand{
+  padding:14px 16px 12px;border-bottom:1px solid var(--rule);
+  display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;
+}
+.brand h1{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.02em}
+.brand .file{font-family:var(--mono);font-size:11px;color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--warn);display:none}
+.dot.on{display:inline-block}
+
+.scroll{overflow-y:auto;flex:1;scrollbar-width:thin}
+section.panel{border-bottom:1px solid var(--rule-soft);padding:14px 16px}
+section.panel:last-child{border-bottom:0}
+h2{
+  font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--muted);font-weight:500;margin-bottom:10px;
+  display:flex;align-items:center;gap:8px;
+}
+h2 .count{
+  font-size:10px;letter-spacing:0;background:var(--sunk);color:var(--ink-2);
+  padding:1px 6px;border-radius:9px;
+}
+
+/* ------------------------------------------------------------- summary */
+dl.summary{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12.5px}
+dl.summary dt{color:var(--muted);white-space:nowrap}
+dl.summary dd{color:var(--ink);text-align:right;font-variant-numeric:tabular-nums;
+  overflow-wrap:anywhere}
+
+/* ------------------------------------------------------------ findings */
+.finding{
+  display:grid;grid-template-columns:auto 1fr;gap:9px;width:100%;text-align:left;
+  padding:8px 10px;border-radius:5px;margin-bottom:3px;border:1px solid transparent;
+}
+.finding:hover{background:var(--sunk)}
+.finding.active{border-color:var(--accent);background:var(--accent-soft)}
+.sev{
+  font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+  padding:2px 5px;border-radius:3px;height:fit-content;white-space:nowrap;font-weight:600;
+}
+.sev.error{background:var(--error-soft);color:var(--error)}
+.sev.warning{background:var(--warn-soft);color:var(--warn)}
+.sev.note{background:var(--note-soft);color:var(--note)}
+.finding .msg{font-size:12.5px;color:var(--ink-2)}
+.finding .hint{font-size:11.5px;color:var(--muted);margin-top:3px;display:none}
+.finding.active .hint{display:block}
+.clean{display:flex;gap:9px;align-items:center;color:var(--muted);font-size:12.5px}
+.clean .tick{color:var(--accent);font-weight:700}
+
+/* ------------------------------------------------------------- controls */
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{
+  font-size:11.5px;padding:4px 9px;border-radius:20px;border:1px solid var(--rule);
+  background:var(--raised);color:var(--muted);display:flex;gap:6px;align-items:center;
+}
+.chip:hover{border-color:var(--accent)}
+.chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.chip .sw{width:8px;height:8px;border-radius:2px}
+.chip .n{font-variant-numeric:tabular-nums;opacity:.75;font-size:10.5px}
+
+.seg{display:flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+.seg button{flex:1;padding:6px 4px;font-size:11.5px;color:var(--muted);background:var(--raised)}
+.seg button+button{border-left:1px solid var(--rule)}
+.seg button.on{background:var(--accent);color:var(--accent-ink)}
+.seg button kbd{opacity:.55;font-family:var(--mono);font-size:9px;margin-left:3px}
+
+/* ------------------------------------------------------------ inspector */
+#inspector{
+  position:absolute;right:16px;top:16px;width:296px;max-height:calc(100% - 92px);
+  background:var(--surface);border:1px solid var(--rule);border-radius:9px;
+  box-shadow:0 8px 30px rgba(0,0,0,.16);display:none;flex-direction:column;overflow:hidden;
+}
+#inspector.on{display:flex}
+.insp-head{
+  padding:12px 14px;border-bottom:1px solid var(--rule-soft);
+  display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+}
+.insp-head strong{font-family:var(--mono);font-size:13px;letter-spacing:-.01em}
+.insp-body{padding:12px 14px;overflow-y:auto}
+.breakdown{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
+.tag{
+  font-size:11px;padding:2px 8px;border-radius:4px;background:var(--sunk);color:var(--ink-2);
+  font-variant-numeric:tabular-nums;display:flex;gap:5px;align-items:center;
+}
+.tag .sw{width:7px;height:7px;border-radius:2px}
+
+.field{margin-bottom:11px}
+.field label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}
+.field .row{display:flex;gap:6px}
+.field input{
+  flex:1;min-width:0;padding:6px 9px;border:1px solid var(--rule);border-radius:5px;
+  background:var(--raised);font-variant-numeric:tabular-nums;
+}
+.field button.apply{
+  padding:6px 12px;border-radius:5px;background:var(--accent);color:var(--accent-ink);
+  font-size:12px;font-weight:500;white-space:nowrap;
+}
+.field button.apply:disabled{opacity:.4;cursor:not-allowed}
+.why{font-size:11.5px;color:var(--muted);margin-top:8px;padding-top:8px;
+  border-top:1px solid var(--rule-soft)}
+.detail{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12px;
+  margin-bottom:12px}
+.detail dt{color:var(--muted)}
+.detail dd{text-align:right;font-variant-numeric:tabular-nums}
+
+/* --------------------------------------------------------------- hint */
+#hint{
+  position:absolute;left:50%;bottom:16px;transform:translateX(-50%);
+  background:var(--surface);border:1px solid var(--rule);border-radius:20px;
+  padding:7px 15px;font-size:12px;color:var(--muted);white-space:nowrap;
+  box-shadow:0 3px 14px rgba(0,0,0,.10);pointer-events:none;
+  display:flex;gap:12px;align-items:center;max-width:calc(100% - 32px);overflow:hidden;
+}
+#hint kbd{
+  font-family:var(--mono);font-size:10px;background:var(--sunk);color:var(--ink-2);
+  padding:1px 5px;border-radius:3px;border:1px solid var(--rule);
+}
+#tooltip{
+  position:absolute;pointer-events:none;display:none;z-index:5;
+  background:var(--raised);border:1px solid var(--rule);border-radius:6px;
+  padding:7px 10px;font-family:var(--mono);font-size:11px;line-height:1.5;
+  box-shadow:0 4px 16px rgba(0,0,0,.14);white-space:pre;
+}
+#toast{
+  position:absolute;left:50%;top:16px;transform:translateX(-50%);
+  background:var(--accent);color:var(--accent-ink);border-radius:6px;
+  padding:8px 16px;font-size:12.5px;display:none;z-index:6;
+}
+#toast.err{background:var(--error)}
+
+/* ---------------------------------------------------------- empty state */
+#empty{
+  height:100%;display:flex;align-items:center;justify-content:center;padding:32px;
+}
+.drop{
+  border:2px dashed var(--rule);border-radius:14px;padding:52px 46px;text-align:center;
+  max-width:520px;background:var(--surface);transition:border-color .15s,background .15s;
+}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop h2{
+  font-family:var(--mono);font-size:22px;letter-spacing:-.02em;text-transform:none;
+  color:var(--ink);justify-content:center;margin-bottom:8px;
+}
+.drop p{color:var(--muted);margin-bottom:22px;font-size:13.5px}
+.drop ul{list-style:none;text-align:left;display:inline-block;color:var(--ink-2);font-size:13px}
+.drop li{padding-left:20px;position:relative;margin-bottom:5px}
+.drop li::before{content:"→";position:absolute;left:0;color:var(--accent)}
+.drop .pick{
+  margin-top:22px;padding:9px 20px;border-radius:6px;background:var(--accent);
+  color:var(--accent-ink);font-weight:500;
+}
+footer.bar{
+  padding:9px 16px;border-top:1px solid var(--rule);font-size:11.5px;color:var(--muted);
+  display:flex;justify-content:space-between;gap:10px;align-items:center;
+}
+footer.bar button{color:var(--accent);font-size:11.5px}
+footer.bar button:disabled{color:var(--muted);cursor:not-allowed}
+</style>
+</head>
+<body>
+<div id="app" class="empty">
+  <aside id="side" hidden>
+    <div class="brand">
+      <h1>candejar</h1>
+      <span class="dot" id="dirty" title="unsaved changes"></span>
+      <span class="file" id="filename"></span>
+    </div>
+    <div class="scroll" id="panels"></div>
+    <footer class="bar">
+      <span id="status">ready</span>
+      <button id="save" disabled>Save</button>
+    </footer>
+  </aside>
+
+  <main id="stage">
+    <div id="empty">
+      <div class="drop" id="drop">
+        <h2>candejar</h2>
+        <p>Drop a CANDE <code>.cid</code> file here.<br>It stays on your machine.</p>
+        <ul>
+          <li>See the mesh, coloured by material, construction step or element type</li>
+          <li>Find what CANDE would reject &mdash; before it rejects it</li>
+          <li>Select elements and reassign material or load step</li>
+        </ul>
+        <div><button class="pick" id="pick">Choose a file</button></div>
+        <input type="file" id="file" accept=".cid,.txt" hidden>
+      </div>
+    </div>
+    <canvas id="canvas" hidden></canvas>
+    <div id="inspector"></div>
+    <div id="hint" hidden></div>
+    <div id="tooltip"></div>
+    <div id="toast"></div>
+  </main>
+</div>
+
+<script>
+"use strict";
+
+// Colours chosen to stay distinguishable on both grounds and to survive the
+// most common colour-vision deficiencies at these small sizes.
+const PALETTE = ["#4E79A7","#E1575A","#5FA55A","#B07AA1","#E8A33D","#40A0A8",
+                 "#8C6D4F","#C86D9B","#6E8F3F","#9C6BC2","#D0762F","#3F7FA6"];
+const KIND_COLOUR = {
+  "beam":"#E1575A", "triangle":"#4E79A7", "quad":"#5FA55A",
+  "interface":"#E8A33D", "link-fixed":"#B07AA1", "link-pinned":"#9C6BC2",
+  "composite-link":"#C86D9B", "unknown":"#8C6D4F",
+};
+const KIND_LABEL = {
+  "beam":"beam", "triangle":"triangle", "quad":"quad", "interface":"interface",
+  "link-fixed":"link (fixed)", "link-pinned":"link (pinned)",
+  "composite-link":"composite link", "unknown":"unrecognised",
+};
+
+const S = {
+  data:null, sel:new Set(), hover:null, colour:"material",
+  hidden:new Set(), activeFinding:null,
+  view:{x:0, y:0, k:1}, drag:null, box:null,
+};
+
+const $ = (id) => document.getElementById(id);
+const canvas = $("canvas"), ctx = canvas.getContext("2d");
+
+/* ------------------------------------------------------------- loading */
+
+async function boot(){
+  const state = await (await fetch("/api/state")).json();
+  if (state.open) adopt(state); else showEmpty();
+}
+function showEmpty(){
+  $("app").classList.add("empty"); $("side").hidden = true;
+  $("empty").style.display = "flex"; canvas.hidden = true; $("hint").hidden = true;
+}
+function adopt(state){
+  S.data = state; S.sel.clear(); S.activeFinding = null;
+  $("app").classList.remove("empty"); $("side").hidden = false;
+  $("empty").style.display = "none"; canvas.hidden = false;
+  $("filename").textContent = state.name;
+  $("dirty").classList.toggle("on", !!state.dirty);
+  $("save").disabled = !state.dirty;
+  resize(); fit(); renderPanels(); renderInspector(); draw();
+}
+async function openText(text, name){
+  toast("Reading " + name + "…");
+  const res = await fetch("/api/open", {method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({text, name})});
+  const state = await res.json();
+  if (state.error) return toast(state.error, true);
+  adopt(state); toast(name + " opened");
+}
+function readFile(file){
+  const reader = new FileReader();
+  reader.onload = () => openText(reader.result, file.name);
+  reader.readAsText(file, "latin1");
+}
+
+/* --------------------------------------------------------------- panels */
+
+function renderPanels(){
+  const d = S.data, out = [];
+
+  out.push(panel("Model", `<dl class="summary">` +
+    d.summary.map(r => `<dt>${esc(r.label)}</dt><dd>${esc(r.value)}</dd>`).join("") +
+    `</dl>`));
+
+  const bySev = {error:0, warning:0, note:0};
+  d.findings.forEach(f => bySev[f.severity]++);
+  const badge = bySev.error ? `<span class="count">${bySev.error} to fix</span>`
+              : bySev.warning ? `<span class="count">${bySev.warning} to check</span>` : "";
+  const body = d.findings.length
+    ? d.findings.map((f,i) => `
+        <button class="finding${S.activeFinding===i?" active":""}" data-finding="${i}">
+          <span class="sev ${f.severity}">${f.severity}</span>
+          <span><span class="msg">${esc(f.message)}</span>
+          ${f.hint ? `<span class="hint">${esc(f.hint)}</span>` : ""}</span>
+        </button>`).join("")
+    : `<div class="clean"><span class="tick">✓</span>
+       <span>Nothing to report. This file should run.</span></div>`;
+  out.push(panel("Checks" + (badge ? "" : ""), body, badge));
+
+  // Only offer a view control when there is a mesh to view.
+  if (d.hasMesh && d.elements.length){
+    out.push(panel("Colour by", `
+      <div class="seg" id="colourseg">
+        ${seg("material","Material","1")}${seg("step","Step","2")}${seg("kind","Type","3")}
+      </div>
+      <div style="margin-top:11px" id="legend"></div>`));
+
+    const kinds = tally(d.elements.map(e => e.kind));
+    if (Object.keys(kinds).length > 1){
+      out.push(panel("Show", `<div class="chips">` + Object.entries(kinds)
+        .sort((a,b) => b[1]-a[1]).map(([k,n]) => `
+          <button class="chip${S.hidden.has(k)?"":" on"}" data-kind="${k}">
+            <span class="sw" style="background:${KIND_COLOUR[k]}"></span>
+            ${KIND_LABEL[k]||k}<span class="n">${n.toLocaleString()}</span>
+          </button>`).join("") + `</div>`));
+    }
+  }
+
+  if (Object.keys(d.uncatalogued||{}).length){
+    const rows = Object.entries(d.uncatalogued).sort()
+      .map(([n,c]) => `<dt>${esc(n)}</dt><dd>${c.toLocaleString()}</dd>`).join("");
+    out.push(panel("Preserved verbatim",
+      `<dl class="summary">${rows}</dl>
+       <div class="why">These line types have no field table yet. They are written
+       back exactly as they were read, so nothing is lost.</div>`));
+  }
+
+  $("panels").innerHTML = out.join("");
+  renderLegend();
+
+  $("panels").querySelectorAll("[data-finding]").forEach(el =>
+    el.onclick = () => gotoFinding(+el.dataset.finding));
+  $("panels").querySelectorAll("[data-kind]").forEach(el =>
+    el.onclick = () => { toggleSet(S.hidden, el.dataset.kind); renderPanels(); draw(); });
+  $("panels").querySelectorAll("[data-colour]").forEach(el =>
+    el.onclick = () => setColour(el.dataset.colour));
+}
+const panel = (title, body, badge="") =>
+  `<section class="panel"><h2>${title}${badge}</h2>${body}</section>`;
+const seg = (key, label, k) =>
+  `<button data-colour="${key}" class="${S.colour===key?"on":""}">${label}<kbd>${k}</kbd></button>`;
+
+function renderLegend(){
+  const box = $("legend"); if (!box) return;
+  const d = S.data;
+  let entries;
+  if (S.colour === "material"){
+    // Beams carry a pipe-group number and interfaces an interface-property
+    // number; neither is a soil material, so they must not be listed as one.
+    const names = {}; d.materials.forEach(m => { if(!m.isInterface) names[m.number] = m.name; });
+    const soil = uniq(d.elements.filter(e => e.kind === "triangle" || e.kind === "quad")
+      .map(e => e.material)).sort((a,b) => a-b)
+      .map(v => [colourFor(v), (names[v] ? `${v} · ${names[v]}` : `soil material ${v}`)]);
+    const groups = uniq(d.elements.filter(e => e.kind === "beam").map(e => e.material))
+      .sort((a,b) => a-b).map(v => [colourFor(v), `pipe group ${v}`]);
+    const interfaces = uniq(d.elements.filter(e => e.kind === "interface").map(e => e.material))
+      .sort((a,b) => a-b).map(v => [colourFor(v), `interface ${v}`]);
+    entries = [...soil, ...groups, ...(interfaces.length > 6 ? [] : interfaces)];
+    if (interfaces.length > 6)
+      entries.push(["transparent", `+ ${interfaces.length} interface properties`]);
+  } else if (S.colour === "step"){
+    entries = d.steps.map(v => [colourFor(v), `step ${v}`]);
+  } else {
+    entries = uniq(d.elements.map(e => e.kind))
+      .map(k => [KIND_COLOUR[k]||"#888", KIND_LABEL[k]||k]);
+  }
+  box.innerHTML = `<div class="chips">` + entries.slice(0,18).map(([c,label]) =>
+    `<span class="chip"><span class="sw" style="background:${c}"></span>${esc(label)}</span>`
+  ).join("") + `</div>`;
+}
+function setColour(mode){ S.colour = mode; renderPanels(); draw(); }
+
+/* ------------------------------------------------------------ inspector */
+
+function renderInspector(){
+  const box = $("inspector");
+  if (!S.sel.size){ box.classList.remove("on"); box.innerHTML = ""; updateHint(); return; }
+
+  const chosen = [...S.sel].map(n => S.data.elements.find(e => e.n === n)).filter(Boolean);
+  const kinds = tally(chosen.map(e => e.kind));
+  const one = chosen.length === 1 ? chosen[0] : null;
+
+  let html = `<div class="insp-head">
+      <strong>${one ? "Element " + one.n : chosen.length.toLocaleString() + " selected"}</strong>
+      <button id="clearsel" style="font-size:11.5px;color:var(--muted)">Clear <kbd>esc</kbd></button>
+    </div><div class="insp-body">`;
+
+  if (!one){
+    html += `<div class="breakdown">` + Object.entries(kinds).sort((a,b)=>b[1]-a[1])
+      .map(([k,n]) => `<span class="tag"><span class="sw" style="background:${KIND_COLOUR[k]}"></span>${n.toLocaleString()} ${KIND_LABEL[k]||k}</span>`)
+      .join("") + `</div>`;
+  } else {
+    const mat = S.data.materials.find(m =>
+      m.number === one.material && m.isInterface === (one.kind === "interface"));
+    html += `<dl class="detail">
+      <dt>Type</dt><dd>${KIND_LABEL[one.kind]||one.kind}</dd>
+      <dt>Nodes</dt><dd>${one.nodes.join(", ")}</dd>
+      <dt>${one.kind === "beam" ? "Pipe group" : one.kind === "interface" ? "Interface" : "Material"}</dt>
+      <dd>${one.material}${mat && mat.name ? " · " + esc(mat.name) : ""}</dd>
+      <dt>Born at step</dt><dd>${one.birth}</dd>
+      <dt>Line</dt><dd>${one.index + 1}</dd>
+    </dl>`;
+  }
+
+  // Actions appear only where they mean something for this selection.
+  const materialSets = uniq(chosen.map(e => e.kind === "interface" ? "interface"
+                                         : e.kind === "beam" ? "group" : "soil"));
+  if (materialSets.length === 1){
+    const what = materialSets[0] === "group" ? "Pipe group"
+               : materialSets[0] === "interface" ? "Interface material" : "Soil material";
+    html += numberField("material", what, one ? one.material : "");
+  } else {
+    html += `<div class="why">These elements draw their material number from different
+      places &mdash; soil materials, pipe groups and interface properties are separate
+      sequences &mdash; so assigning one number to all of them would be meaningless.
+      Select one kind at a time.</div>`;
+  }
+  html += numberField("birth", "Born at step", one ? one.birth : "");
+
+  html += `</div>`;
+  box.innerHTML = html; box.classList.add("on");
+
+  $("clearsel").onclick = () => { S.sel.clear(); renderInspector(); draw(); };
+  box.querySelectorAll("[data-apply]").forEach(btn =>
+    btn.onclick = () => applyField(btn.dataset.apply));
+  box.querySelectorAll("[data-input]").forEach(inp => {
+    inp.oninput = () => {
+      const btn = box.querySelector(`[data-apply="${inp.dataset.input}"]`);
+      btn.disabled = inp.value.trim() === "";
+    };
+    inp.onkeydown = (e) => { if (e.key === "Enter") applyField(inp.dataset.input); };
+  });
+  updateHint();
+}
+function numberField(field, label, value){
+  return `<div class="field">
+    <label for="in-${field}">${label}</label>
+    <div class="row">
+      <input id="in-${field}" data-input="${field}" type="number" min="1" step="1"
+             placeholder="${value === "" ? "—" : value}" value="">
+      <button class="apply" data-apply="${field}" disabled>Assign</button>
+    </div>
+  </div>`;
+}
+async function applyField(field){
+  const input = document.querySelector(`[data-input="${field}"]`);
+  const value = parseInt(input.value, 10);
+  if (!Number.isFinite(value)) return;
+  const edits = [...S.sel].map(n => {
+    const e = S.data.elements.find(x => x.n === n);
+    return e ? {index:e.index, field, value} : null;
+  }).filter(Boolean);
+  const res = await fetch("/api/edit", {method:"POST",
+    headers:{"Content-Type":"application/json"}, body:JSON.stringify({edits})});
+  const state = await res.json();
+  if (state.error) return toast(state.error, true);
+  const keep = new Set(S.sel);
+  adopt(state); S.sel = keep;
+  renderInspector(); draw();
+  toast(`${edits.length.toLocaleString()} element${edits.length===1?"":"s"} updated`);
+}
+async function save(){
+  const res = await fetch("/api/save", {method:"POST",
+    headers:{"Content-Type":"application/json"}, body:JSON.stringify({})});
+  const out = await res.json();
+  if (out.error) return toast(out.error, true);
+  $("dirty").classList.remove("on"); $("save").disabled = true;
+  toast("Saved to " + out.saved);
+}
+
+/* -------------------------------------------------------------- drawing */
+
+function resize(){
+  const r = canvas.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+  canvas.width = r.width * dpr; canvas.height = r.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function fit(){
+  const e = S.data && S.data.extents; if (!e) return;
+  const r = canvas.getBoundingClientRect(), pad = 44;
+  const k = Math.min((r.width - pad*2) / (e.maxX - e.minX || 1),
+                     (r.height - pad*2) / (e.maxY - e.minY || 1));
+  S.view.k = k;
+  S.view.x = r.width/2 - k*(e.minX + e.maxX)/2;
+  S.view.y = r.height/2 + k*(e.minY + e.maxY)/2;
+}
+const tx = (x) => x * S.view.k + S.view.x;
+const ty = (y) => -y * S.view.k + S.view.y;
+const ux = (px) => (px - S.view.x) / S.view.k;
+const uy = (py) => -(py - S.view.y) / S.view.k;
+
+function colourFor(v){ return PALETTE[(Math.abs(v|0)) % PALETTE.length]; }
+function elementColour(e){
+  if (S.colour === "kind") return KIND_COLOUR[e.kind] || "#888";
+  if (S.colour === "step") return colourFor(e.birth);
+  return colourFor(e.material);
+}
+function pointsOf(e){
+  const out = [];
+  for (const n of e.nodes){ const p = S.data.nodes[n]; if (p) out.push(p); }
+  return out;
+}
+function draw(){
+  const r = canvas.getBoundingClientRect();
+  ctx.clearRect(0, 0, r.width, r.height);
+  if (!S.data || !S.data.elements.length) return;
+
+  const beams = [], faces = [], marks = [];
+  for (const e of S.data.elements){
+    if (S.hidden.has(e.kind)) continue;
+    if (e.kind === "beam") beams.push(e);
+    else if (e.kind === "triangle" || e.kind === "quad") faces.push(e);
+    else marks.push(e);
+  }
+
+  for (const e of faces){
+    const pts = pointsOf(e); if (pts.length < 3) continue;
+    ctx.beginPath(); ctx.moveTo(tx(pts[0][0]), ty(pts[0][1]));
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(tx(pts[i][0]), ty(pts[i][1]));
+    ctx.closePath();
+    const on = S.sel.has(e.n);
+    ctx.fillStyle = elementColour(e); ctx.globalAlpha = on ? 0.95 : 0.62; ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = on ? "#fff" : "rgba(0,0,0,.22)";
+    ctx.lineWidth = on ? 2 : (S.view.k > 1.4 ? 0.7 : 0.35);
+    ctx.stroke();
+  }
+  ctx.lineCap = "round";
+  for (const e of beams){
+    const pts = pointsOf(e); if (pts.length < 2) continue;
+    ctx.beginPath(); ctx.moveTo(tx(pts[0][0]), ty(pts[0][1]));
+    ctx.lineTo(tx(pts[1][0]), ty(pts[1][1]));
+    const on = S.sel.has(e.n);
+    ctx.strokeStyle = on ? "#fff" : elementColour(e);
+    ctx.lineWidth = on ? 5 : 3; ctx.stroke();
+    if (on){ ctx.strokeStyle = elementColour(e); ctx.lineWidth = 2; ctx.stroke(); }
+  }
+  for (const e of marks){
+    const pts = pointsOf(e); if (!pts.length) continue;
+    const x = tx(pts[0][0]), y = ty(pts[0][1]), s = S.sel.has(e.n) ? 6 : 4;
+    ctx.beginPath(); ctx.moveTo(x, y-s); ctx.lineTo(x+s, y);
+    ctx.lineTo(x, y+s); ctx.lineTo(x-s, y); ctx.closePath();
+    ctx.fillStyle = elementColour(e); ctx.fill();
+    ctx.strokeStyle = S.sel.has(e.n) ? "#fff" : "rgba(0,0,0,.3)";
+    ctx.lineWidth = S.sel.has(e.n) ? 2 : 0.8; ctx.stroke();
+  }
+  if (S.box){
+    const {x0,y0,x1,y1} = S.box;
+    ctx.setLineDash([5,4]); ctx.strokeStyle = "rgba(30,95,82,.9)"; ctx.lineWidth = 1;
+    ctx.fillStyle = "rgba(30,95,82,.10)";
+    ctx.fillRect(x0, y0, x1-x0, y1-y0); ctx.strokeRect(x0, y0, x1-x0, y1-y0);
+    ctx.setLineDash([]);
+  }
+}
+
+/* ------------------------------------------------------------ picking */
+
+function centroid(e){
+  const pts = pointsOf(e); if (!pts.length) return null;
+  let x = 0, y = 0; for (const p of pts){ x += p[0]; y += p[1]; }
+  return [x/pts.length, y/pts.length];
+}
+function pick(px, py){
+  let best = null, bestD = 14*14;
+  for (const e of S.data.elements){
+    if (S.hidden.has(e.kind)) continue;
+    const c = centroid(e); if (!c) continue;
+    const dx = tx(c[0]) - px, dy = ty(c[1]) - py, d = dx*dx + dy*dy;
+    if (d < bestD){ bestD = d; best = e; }
+  }
+  if (best) return best;
+  for (const e of S.data.elements){
+    if (S.hidden.has(e.kind) || (e.kind !== "triangle" && e.kind !== "quad")) continue;
+    if (inside(ux(px), uy(py), pointsOf(e))) return e;
+  }
+  return null;
+}
+function inside(x, y, pts){
+  let hit = false;
+  for (let i = 0, j = pts.length-1; i < pts.length; j = i++){
+    const [xi,yi] = pts[i], [xj,yj] = pts[j];
+    if ((yi > y) !== (yj > y) && x < (xj-xi)*(y-yi)/(yj-yi) + xi) hit = !hit;
+  }
+  return hit;
+}
+function inBox(box){
+  const x0 = Math.min(box.x0,box.x1), x1 = Math.max(box.x0,box.x1);
+  const y0 = Math.min(box.y0,box.y1), y1 = Math.max(box.y0,box.y1);
+  return S.data.elements.filter(e => {
+    if (S.hidden.has(e.kind)) return false;
+    const c = centroid(e); if (!c) return false;
+    const x = tx(c[0]), y = ty(c[1]);
+    return x >= x0 && x <= x1 && y >= y0 && y <= y1;
+  });
+}
+
+/* --------------------------------------------------------------- events */
+
+canvas.addEventListener("mousedown", (ev) => {
+  const r = canvas.getBoundingClientRect();
+  const px = ev.clientX - r.left, py = ev.clientY - r.top;
+  if (ev.button === 1 || ev.button === 2 || ev.altKey){
+    S.drag = {px, py, vx:S.view.x, vy:S.view.y};
+  } else {
+    S.box = {x0:px, y0:py, x1:px, y1:py, add:ev.shiftKey, moved:false};
+  }
+});
+canvas.addEventListener("mousemove", (ev) => {
+  const r = canvas.getBoundingClientRect();
+  const px = ev.clientX - r.left, py = ev.clientY - r.top;
+  if (S.drag){
+    S.view.x = S.drag.vx + (px - S.drag.px);
+    S.view.y = S.drag.vy + (py - S.drag.py);
+    draw(); return;
+  }
+  if (S.box){
+    S.box.x1 = px; S.box.y1 = py;
+    if (Math.hypot(px-S.box.x0, py-S.box.y0) > 4) S.box.moved = true;
+    draw(); return;
+  }
+  const hit = pick(px, py);
+  S.hover = hit ? hit.n : null;
+  showTooltip(hit, ev.clientX - r.left, ev.clientY - r.top);
+});
+addEventListener("mouseup", () => {
+  if (S.box){
+    if (S.box.moved){
+      const found = inBox(S.box);
+      if (!S.box.add) S.sel.clear();
+      found.forEach(e => S.sel.add(e.n));
+    } else {
+      const hit = pick(S.box.x0, S.box.y0);
+      if (!S.box.add) S.sel.clear();
+      if (hit) S.box.add && S.sel.has(hit.n) ? S.sel.delete(hit.n) : S.sel.add(hit.n);
+    }
+    S.box = null; renderInspector(); draw();
+  }
+  S.drag = null;
+});
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+canvas.addEventListener("wheel", (ev) => {
+  ev.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  const px = ev.clientX - r.left, py = ev.clientY - r.top;
+  const wx = ux(px), wy = uy(py);
+  S.view.k *= Math.exp(-ev.deltaY * 0.0016);
+  S.view.x = px - wx * S.view.k; S.view.y = py + wy * S.view.k;
+  draw();
+}, {passive:false});
+canvas.addEventListener("mouseleave", () => { $("tooltip").style.display = "none"; });
+
+addEventListener("keydown", (ev) => {
+  if (ev.target.tagName === "INPUT") return;
+  if (ev.key === "Escape"){ S.sel.clear(); renderInspector(); draw(); }
+  else if (ev.key === "f"){ fit(); draw(); }
+  else if (ev.key === "1"){ setColour("material"); }
+  else if (ev.key === "2"){ setColour("step"); }
+  else if (ev.key === "3"){ setColour("kind"); }
+  else if (ev.key === "a" && (ev.ctrlKey || ev.metaKey)){
+    ev.preventDefault();
+    S.data.elements.forEach(e => { if (!S.hidden.has(e.kind)) S.sel.add(e.n); });
+    renderInspector(); draw();
+  } else if (ev.key === "s" && (ev.ctrlKey || ev.metaKey)){
+    ev.preventDefault(); if (!$("save").disabled) save();
+  }
+});
+addEventListener("resize", () => { resize(); draw(); });
+$("save").onclick = save;
+
+function showTooltip(e, px, py){
+  const tip = $("tooltip");
+  if (!e){ tip.style.display = "none"; return; }
+  const mat = S.data.materials.find(m =>
+    m.number === e.material && m.isInterface === (e.kind === "interface"));
+  const what = e.kind === "beam" ? "pipe group"
+             : e.kind === "interface" ? "interface" : "material";
+  tip.textContent =
+    `element ${e.n}  ${KIND_LABEL[e.kind]||e.kind}\n` +
+    `${what} ${e.material}${mat && mat.name ? "  " + mat.name : ""}\n` +
+    `step ${e.birth}   nodes ${e.nodes.join(" ")}`;
+  tip.style.display = "block";
+  tip.style.left = Math.min(px + 14, canvas.clientWidth - tip.offsetWidth - 8) + "px";
+  tip.style.top = (py + 16) + "px";
+}
+
+function gotoFinding(i){
+  S.activeFinding = S.activeFinding === i ? null : i;
+  const f = S.data.findings[i];
+  if (f && f.index != null){
+    const e = S.data.elements.find(x => x.index === f.index);
+    if (e){
+      S.sel = new Set([e.n]);
+      const c = centroid(e);
+      if (c){
+        const r = canvas.getBoundingClientRect();
+        S.view.k = Math.max(S.view.k, 3);
+        S.view.x = r.width/2 - c[0]*S.view.k;
+        S.view.y = r.height/2 + c[1]*S.view.k;
+      }
+    }
+  }
+  renderPanels(); renderInspector(); draw();
+}
+
+function updateHint(){
+  const hint = $("hint");
+  if (!S.data || !S.data.elements.length){ hint.hidden = true; return; }
+  hint.hidden = false;
+  hint.innerHTML = S.sel.size
+    ? `<span>${S.sel.size.toLocaleString()} selected</span>
+       <span><kbd>⇧</kbd> drag to add</span>
+       <span><kbd>esc</kbd> clear</span>`
+    : `<span>Click an element to inspect it</span>
+       <span>drag to box-select</span>
+       <span><kbd>alt</kbd> drag to pan</span>
+       <span><kbd>f</kbd> fit</span>`;
+}
+
+/* ----------------------------------------------------------- utilities */
+
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const uniq = (a) => [...new Set(a)];
+function tally(list){ const o = {}; list.forEach(v => o[v] = (o[v]||0)+1); return o; }
+function toggleSet(set, v){ set.has(v) ? set.delete(v) : set.add(v); }
+let toastTimer;
+function toast(text, bad){
+  const el = $("toast"); el.textContent = text;
+  el.classList.toggle("err", !!bad); el.style.display = "block";
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.style.display = "none", 2600);
+}
+
+/* ------------------------------------------------------------ file drop */
+const drop = $("drop");
+["dragenter","dragover"].forEach(t => addEventListener(t, (e) => {
+  e.preventDefault(); drop.classList.add("over");
+}));
+["dragleave","drop"].forEach(t => addEventListener(t, (e) => {
+  e.preventDefault(); if (t === "dragleave" && e.relatedTarget) return;
+  drop.classList.remove("over");
+}));
+addEventListener("drop", (e) => {
+  const file = e.dataTransfer.files[0]; if (file) readFile(file);
+});
+$("pick").onclick = () => $("file").click();
+$("file").onchange = (e) => { if (e.target.files[0]) readFile(e.target.files[0]); };
+
+boot();
+</script>
+</body>
+</html>

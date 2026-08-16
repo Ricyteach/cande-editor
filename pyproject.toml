@@ -8,13 +8,14 @@ version = "0.1.0.dev0"
 description = "A CANDE preprocessor core: read, validate and write CANDE .cid input files"
 authors = [{ name = "Rick Teachey", email = "ricky@teachey.org" }]
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 keywords = ["cande", "culvert", "buried structure", "finite element", "cid"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering",
@@ -28,8 +29,14 @@ dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6", "mypy>=1.11"]
 [project.urls]
 Homepage = "https://github.com/Ricyteach/cande-editor"
 
+[project.scripts]
+candejar = "candejar.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+candejar = ["static/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -49,6 +56,6 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 # and parametrize decorators do not survive --strict, so they are covered by ruff
 # and by actually running them rather than by mypy.
 files = ["src"]
-python_version = "3.12"
+python_version = "3.11"
 strict = true
 exclude = "^(legacy|docs)/"

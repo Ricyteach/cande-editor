@@ -13,7 +13,7 @@ makes it safe to ship a codec that covers part of a large format.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -136,7 +136,7 @@ class Document:
         lines[index] = line
         return replace(self, lines=tuple(lines))
 
-    def with_changes(self, changes: dict[int, Line]) -> Document:
+    def with_changes(self, changes: Mapping[int, Line]) -> Document:
         """Return a copy with several lines replaced at once."""
         if not changes:
             return self
