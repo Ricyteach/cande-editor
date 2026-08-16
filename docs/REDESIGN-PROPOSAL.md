@@ -490,13 +490,49 @@ findings rather than as an advertisement.
 Worth more than the button: a **client-side-generated PDF report** on KBJW
 letterhead, which ends up saved in the client's own project folder.
 
-Two things to settle before it goes live, both outside the code:
+The tool should carry a **one-line scope disclaimer** — it checks file and model
+consistency, not design adequacy — so its output is not read as an engineering
+review once strangers are using it.
 
-- "Available in all 50 states and Canada" is a **licensure claim** — the wording
-  should go past whoever handles the firm's COAs and reciprocity.
-- The tool needs a **one-line scope disclaimer**: it checks file and model
-  consistency, not design adequacy. That keeps its output from being read as an
-  engineering review once strangers are using it.
+**Subdomain: `cande.kbjwgroup.com`.** "CANDE" is the term people search and type;
+it is self-explanatory pasted into an email or a forum thread; and it leaves room
+for the validator at the root and the full application behind a path later without
+renaming anything. (`culvert.kbjwgroup.com` if more buried-structure tools are
+expected to live there; `candecheck.` if the name should state the function, at the
+cost of locking it to validation.)
+
+### 4.6 One codebase, two deployments — and the commercial boundary
+
+**Decided.** The public validator is not a replacement for the full preprocessor;
+it is the same core under a smaller UI. Both are needed — the full tool for
+in-house work, with the option to sell it later.
+
+| Deployment | Contents | Audience |
+|---|---|---|
+| `cande.kbjwgroup.com` | static page, `strata-core` compiled to WASM | public, free, lead source |
+| `pip install strata-pro` | full web UI on `localhost` + CLI, talking to CANDE on the local machine | in-house now, potentially commercial later |
+
+This is how the full preprocessor gets built without a second UI and without Qt.
+It is also the right shape for a paid CANDE tool regardless: the solver runs on the
+user's Windows machine, so the product is a local install, not a hosted service.
+
+**The constraint that follows from client-side WASM:** anything in the public page
+can be extracted from the browser. So the split must be structural, and it happens
+to fall exactly on the architecture boundary already in §4.1:
+
+| Layer | Package | Ships to browser | Licence |
+|---|---|---|---|
+| `io`, `model`, `validate` | `strata-core` | yes | permissive (MIT / Apache-2.0) |
+| `mesh`, `solve`, `studies`, full editor | `strata-pro` | **never** | proprietary, private repo |
+
+Open-sourcing the core is right even commercially — the value is not in the parser,
+and a public codec buys credibility, bug reports, and other people's test files. The
+value is in generating meshes and closing the loop, and that stays in `strata-pro`.
+
+**This is a Phase 0 decision, not a Phase 4 one.** The repository is MIT-licensed
+today; if `strata-pro` code lands in it, that is arguably released. Splitting the
+packages at the start costs nothing. Retrofitting the split after a year of commits
+is genuinely painful.
 
 ---
 
@@ -506,18 +542,25 @@ Six phases. Each one ships something usable on its own; none of them requires th
 next one to justify itself.
 
 ### Phase 0 — Foundations *(~1 week)*
-`src/` layout, single top-level package, working `pyproject.toml`, pytest + ruff +
-mypy in CI, `.cid` test corpus assembled. The current `tests/utils/…` file moves
-to `docs/notes/` where it belongs as the design sketch it is.
-**You get:** a repo that builds and tests.
+`src/` layout, **the `strata-core` / `strata-pro` package split and licences
+settled** (§4.6), working `pyproject.toml`, pytest + ruff + mypy in CI, `.cid`
+test corpus assembled as fixtures. The current `tests/utils/…` file moves to
+`docs/notes/` where it belongs as the design sketch it is.
+**You get:** a repo that builds and tests, with the commercial boundary in place
+before any code depends on it being elsewhere.
 
 ### Phase 1 — Codec and model *(~3 weeks)*
-`strata.io` + `strata.model`. All line types the corpus exercises, `RawLine`
-pass-through for the rest, byte-identical round-trip test, and a CLI:
-`strata check` (structural validation), `strata fmt` (normalise a file),
-`strata show` (human-readable summary of what a `.cid` actually contains).
+`strata.io` + `strata.model`. All line types the corpus exercises across **Levels 1,
+2 and 3** — including the canned-mesh families (`A-2.L12`, `C-1…C-4.L2.Pipe/Box/Arch`)
+and the `CX-1…CX-4` extended-Level-2 lines — with `RawLine` pass-through for the
+rest, byte-identical round-trip tests, and a CLI: `strata check`, `strata fmt`,
+`strata show`.
 **You get:** a library and CLI that already do something the stock tools don't —
-tell you what's wrong with a `.cid` before you run it. No GUI needed.
+tell you what's wrong with a `.cid` before you run it. No UI needed.
+
+*Level 2 is cheap: a whole Level 2 model is 22 lines, so the canned-mesh line types
+are data entry. Worth it because a validator that accepts anything dropped on it is
+a far better first impression than "unsupported file."*
 
 ### Phase 2 — Operations and validation *(~3 weeks)*
 `strata.ops` and `strata.validate`. Assign material/step, insert interface
@@ -599,13 +642,16 @@ to 908 KB. That is enough to build the codec against. What remains:
    nothing obviously using link elements or the `CX-*` extended-Level-2 lines; and
    no examples CANDE *rejected* — those last ones pin down the validation rules
    better than any number of valid files.
-3. **Two decisions** — the UI question is **settled: web + CLI, no Qt** (§4.4):
-   - Level 3 only at first, or Level 1/2 in the model from the start? *(Leaning
-     both: the Level 2 file is 22 lines, so the canned-mesh line types are cheap
-     to support, and the public validator is more useful if it accepts anything.)*
-   - Who owns the published page — does it live on the KBJW site proper, or a
-     subdomain? That affects nothing technical, but it decides who signs off.
-4. **Whether to start.** Phase 0 + Phase 1 is the smallest slice that proves the
+3. **All UI and scope decisions are settled:**
+   - Web + CLI, no Qt (§4.4).
+   - Levels 1, 2 and 3 from the start (§5, Phase 1).
+   - Two deployments off one codebase; full preprocessor as a local install (§4.6).
+   - `cande.kbjwgroup.com` (§4.5).
+4. **One decision left, and it belongs in Phase 0:** confirm the
+   `strata-core` (permissive) / `strata-pro` (proprietary) split, so the option to
+   sell the full tool stays open. Everything else can be revised later; this one
+   gets expensive to reverse.
+5. **Whether to start.** Phase 0 + Phase 1 is the smallest slice that proves the
    architecture. Phase 1.5 turns it into something public about a week and a half
    later.
 
