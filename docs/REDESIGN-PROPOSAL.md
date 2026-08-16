@@ -434,15 +434,69 @@ rewrite.
 | Domain model | pydantic v2 | already a dependency; validation and (de)serialisation for free |
 | Geometry | numpy + shapely | vectorised mesh math, robust polygon ops |
 | Unstructured meshing | gmsh (Python API) | fallback for non-standard geometry, with quad recombination |
-| GUI | **PySide6 / Qt** (`QGraphicsView`) | scene graph, hit-testing, rubber-band selection, and smooth zoom/pan are built in — the 566 lines of manual Tk canvas coordinate math simply go away |
-| CLI | typer + rich | |
+| UI | **Web, client-side** — Pyodide (core compiled to WASM) + WebGL rendering | see below |
+| CLI | typer + rich | the native client; covers solver runs, batch sweeps, job folders |
 | Tests | pytest + hypothesis | property-based round-trip tests on the codec, golden-file corpus |
 
-**On the GUI choice:** Tkinter's canvas is why rendering is slow and why the view
-layer is as large as it is. Qt is the recommendation. The alternative — a web
-front end over a FastAPI core — is genuinely viable and better for sharing
-models, but CANDE itself is a Windows executable and this is a desktop workflow,
-so Qt wins on fit. Because the core is headless, that decision is reversible.
+### 4.4 Decision: web, not desktop — and no Qt at all
+
+**Decided.** The original recommendation (PySide6/Qt) assumed a single user on
+Windows next to the solver. The intent to publish the tool — potentially on the
+KBJW site, as a lead source — changes the audience, and once the public client is
+web there is no case for maintaining a second GUI for internal use.
+
+What genuinely needs to be native is not a GUI: running CANDE, batch and
+parametric sweeps, and working against job folders. That is **CLI** work. The
+client matrix is therefore **web + CLI**, and Qt drops out — one fewer UI than
+originally proposed.
+
+**The core runs client-side.** The Python core is compiled to WASM via Pyodide and
+shipped as a **static site**. Nothing is uploaded. That matters more than it
+sounds:
+
+- **Confidentiality.** No engineer uploads a client's culvert model to a
+  consultant's website. "Runs entirely in your browser — your file never leaves
+  your machine" is the headline feature, not a caveat, and it is the difference
+  between a tool people try and a tool people adopt.
+- **No data custody, therefore no liability** for holding third-party models.
+- **Static hosting** — no backend, no server cost, no ops, no attack surface.
+- **One codebase.** The same core runs in the browser, in the CLI, and in batch
+  scripts. A TypeScript port would mean two implementations drifting apart.
+
+Cost is a ~10 MB first load, cached thereafter — acceptable for a tool opened
+deliberately. Rendering uses **WebGL**, not Canvas2D: the largest files in the
+corpus are ~900 KB, well past what Canvas2D handles comfortably and well within
+WebGL's range.
+
+This also partitions the feature set cleanly. Anything needing gmsh or the CANDE
+solver is desktop/CLI territory; parsing, validation, visualisation and reporting
+run anywhere. If interactive editing at very large mesh sizes ever demands native
+performance, Qt remains available off the same headless core — but it should not
+be built speculatively.
+
+### 4.5 The public tool
+
+Not the full preprocessor. **A validator and inspector**: drop in a `.cid`, get the
+mesh drawn, the model explained in plain language, and a ranked list of what is
+wrong with it.
+
+That is Phase 1 plus Phase 2 output, so it is nearly free once the codec exists —
+and it is the thing nobody has. It needs no solver, which keeps CANDE licensing
+and Windows hosting out of scope entirely, and it draws a clean commercial line:
+**the free tool tells you what is in your model; running it, designing it, and
+sealing it is the engineering service.** A call to action sits in context above the
+findings rather than as an advertisement.
+
+Worth more than the button: a **client-side-generated PDF report** on KBJW
+letterhead, which ends up saved in the client's own project folder.
+
+Two things to settle before it goes live, both outside the code:
+
+- "Available in all 50 states and Canada" is a **licensure claim** — the wording
+  should go past whoever handles the firm's COAs and reciprocity.
+- The tool needs a **one-line scope disclaimer**: it checks file and model
+  consistency, not design adequacy. That keeps its output from being read as an
+  engineering review once strangers are using it.
 
 ---
 
@@ -472,13 +526,21 @@ fallback made explicit), renumber, delete, mirror. Rule engine with severities
 and auto-fixes. `strata diff`.
 **You get:** batch editing and model checking from scripts; semantic diffs for QA.
 
-### Phase 3 — The application *(~5 weeks)*
-PySide6 app: mesh rendering with material/step/soil-model colouring, selection
-sets, undo/redo, a validation panel that zooms to findings, property editors for
-soil and structural materials. Feature parity with today's tool, plus everything
-Phase 2 added.
-**You get:** the tool you have now, but correct, faster, undoable, and aware of
-the whole file.
+### Phase 1.5 — Public validator *(~1.5 weeks)*
+The codec and rule engine compiled to WASM behind a single static page: drop a
+`.cid`, see the mesh, read a plain-language summary of the model, get a ranked list
+of findings, download a branded PDF report. Nothing uploads. Deployable to the KBJW
+site or a subdomain with no backend.
+**You get:** a lead source running about six weeks in, while everything after it is
+still being built — and a public artefact that demonstrates the tool works.
+
+### Phase 3 — The full web application *(~5 weeks)*
+The editor: mesh rendering coloured by material, step or soil model; selection
+sets; undo/redo; a validation panel that zooms to findings; property editors for
+soil and structural materials — including the models the CANDE GUI cannot reach.
+Feature parity with today's tool, plus everything Phases 1–2 added.
+**You get:** the tool you have now, but correct, faster, undoable, aware of the
+whole file, and reachable from any machine without an install.
 
 ### Phase 4 — Mesh generation *(~6 weeks)*
 `strata.mesh`. Parametric structure library (box, circular, arch, 2R/3R, ellipse,
@@ -537,12 +599,15 @@ to 908 KB. That is enough to build the codec against. What remains:
    nothing obviously using link elements or the `CX-*` extended-Level-2 lines; and
    no examples CANDE *rejected* — those last ones pin down the validation rules
    better than any number of valid files.
-3. **Three decisions:**
-   - Qt desktop as recommended, or web?
-   - Level 3 only at first, or Level 1/2 in the model from the start?
-   - Is this a personal tool, or something you intend to release?
-4. **Whether to start.** If yes, Phase 0 + Phase 1 is the smallest slice that
-   proves the architecture, and it's independently useful.
+3. **Two decisions** — the UI question is **settled: web + CLI, no Qt** (§4.4):
+   - Level 3 only at first, or Level 1/2 in the model from the start? *(Leaning
+     both: the Level 2 file is 22 lines, so the canned-mesh line types are cheap
+     to support, and the public validator is more useful if it accepts anything.)*
+   - Who owns the published page — does it live on the KBJW site proper, or a
+     subdomain? That affects nothing technical, but it decides who signs off.
+4. **Whether to start.** Phase 0 + Phase 1 is the smallest slice that proves the
+   architecture. Phase 1.5 turns it into something public about a week and a half
+   later.
 
 ## 9. Two findings that make the later phases cheaper
 
