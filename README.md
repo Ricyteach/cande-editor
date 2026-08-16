@@ -91,6 +91,22 @@ materials
 
 A line diff of fixed-column text tells you nothing. This tells you what changed.
 
+### Insert interfaces between the structure and the soil
+
+```bash
+$ candejar interfaces culvert.cid --friction 0.3 --tensile 10 -o interfaced.cid
+57 interface elements, 25 new interface material(s), 32 reused
+  written to interfaced.cid
+```
+
+Or select the beams in the viewer and the action appears. One element per shared
+node — not two. Nodes where the two beams are collinear are reported by number
+rather than silently given a horizontal normal.
+
+Run against a real production model with its interfaces stripped out, this
+reproduces all 57 the engineer placed by hand, at the same locations, with
+angles agreeing to within 0.04°. That comparison is a test.
+
 ### Other commands
 
 | | |
@@ -137,6 +153,7 @@ src/candejar/
 ├── io/          fixed-column codec — reader and writer from one field spec
 ├── model/       typed domain: nodes, elements, materials, boundaries, pipe groups
 ├── validate/    21 rules that run before CANDE does
+├── ops/         structural edits: interface insertion, renumbering, control sync
 ├── cli.py       check · show · fmt · diff · types · serve
 ├── diff.py      semantic comparison
 ├── web.py       local viewer server
@@ -156,7 +173,7 @@ and anything shipped there can be extracted from it. See
 
 ```bash
 pip install -e ".[dev]"
-pytest          # 96 tests
+pytest          # 118 tests
 ruff check .
 mypy
 ```

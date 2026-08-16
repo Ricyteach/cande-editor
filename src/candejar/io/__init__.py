@@ -8,6 +8,7 @@ from candejar.io.document import (
     dumps,
     has_terminator,
     loads,
+    make_record,
     read_cid,
     write_cid,
 )
@@ -44,6 +45,7 @@ __all__ = [
     "has_terminator",
     "join_line",
     "loads",
+    "make_record",
     "read_cid",
     "spec_for",
     "split_line",

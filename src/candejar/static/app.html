@@ -151,6 +151,12 @@ dl.summary dd{color:var(--ink);text-align:right;font-variant-numeric:tabular-num
   border-top:1px solid var(--rule-soft)}
 .detail{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12px;
   margin-bottom:12px}
+.op{margin-top:14px;padding-top:12px;border-top:1px solid var(--rule)}
+.op-head{font-family:var(--mono);font-size:12.5px;font-weight:600;margin-bottom:5px}
+.op-why{font-size:11.5px;color:var(--muted);margin-bottom:10px;line-height:1.45}
+.skip{font-size:12px;margin-bottom:10px;display:grid;gap:2px}
+.skip strong{font-family:var(--mono);font-size:11.5px}
+.skip span{color:var(--muted);line-height:1.45}
 .detail dt{color:var(--muted)}
 .detail dd{text-align:right;font-variant-numeric:tabular-nums}
 
@@ -450,10 +456,26 @@ function renderInspector(){
   }
   html += numberField("birth", "Born at step", one ? one.birth : "");
 
+  // Interface insertion only means something for a selection of beams, so the
+  // control is absent otherwise rather than present and refusing to work.
+  const beams = chosen.filter(e => e.kind === "beam");
+  if (beams.length && beams.length === chosen.length){
+    html += `<div class="op">
+      <div class="op-head">Create interfaces</div>
+      <p class="op-why">Splits each node these ${beams.length} beam${beams.length===1?"":"s"}
+        share with the soil, and inserts one interface element there.</p>
+      <div class="field"><label for="in-friction">Friction coefficient</label>
+        <div class="row"><input id="in-friction" type="number" step="0.05" min="0" value="0.3">
+        <button class="apply" id="mkinterfaces">Create</button></div></div>
+    </div>`;
+  }
+
   html += `</div>`;
   box.innerHTML = html; box.classList.add("on");
 
   $("clearsel").onclick = () => { S.sel.clear(); renderInspector(); draw(); };
+  const mk = document.getElementById("mkinterfaces");
+  if (mk) mk.onclick = () => createInterfaces();
   box.querySelectorAll("[data-apply]").forEach(btn =>
     btn.onclick = () => applyField(btn.dataset.apply));
   box.querySelectorAll("[data-input]").forEach(inp => {
@@ -491,6 +513,38 @@ async function applyField(field){
   adopt(state); S.sel = keep;
   renderInspector(); draw();
   toast(`${edits.length.toLocaleString()} element${edits.length===1?"":"s"} updated`);
+}
+async function createInterfaces(){
+  const friction = parseFloat(document.getElementById("in-friction").value);
+  const beams = [...S.sel].filter(n => {
+    const e = S.data.elements.find(x => x.n === n);
+    return e && e.kind === "beam";
+  });
+  const res = await fetch("/api/interfaces", {method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({beams, properties:{friction}})});
+  const state = await res.json();
+  if (state.error) return toast(state.error, true);
+  const outcome = state.operation || {};
+  adopt(state);
+  if (!outcome.created){
+    toast(outcome.skipped && outcome.skipped.length
+      ? `No interfaces created — ${outcome.skipped.length} node(s) could not be resolved`
+      : "No qualifying nodes in that selection", true);
+  } else {
+    toast(outcome.summary);
+  }
+  if (outcome.skipped && outcome.skipped.length) reportSkipped(outcome.skipped);
+}
+function reportSkipped(skipped){
+  const box = $("inspector");
+  box.innerHTML = `<div class="insp-head"><strong>${skipped.length} node(s) skipped</strong>
+      <button id="clearsel" style="font-size:11.5px;color:var(--muted)">Close</button></div>
+    <div class="insp-body">` + skipped.slice(0,12).map(s =>
+      `<div class="skip"><strong>node ${s.node}</strong><span>${esc(s.reason)}</span></div>`
+    ).join("") + `</div>`;
+  box.classList.add("on");
+  $("clearsel").onclick = () => { S.sel.clear(); renderInspector(); draw(); };
 }
 async function save(){
   const res = await fetch("/api/save", {method:"POST",

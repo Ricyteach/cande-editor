@@ -28,6 +28,7 @@ __all__ = [
     "Verbatim",
     "dumps",
     "loads",
+    "make_record",
     "read_cid",
     "write_cid",
 ]
@@ -119,6 +120,22 @@ class Record:
 Line = Record | Verbatim
 
 
+def make_record(name: str, /, **fields: object) -> Record:
+    """Build a new record of a catalogued line type from field values.
+
+    Fields not given are left blank, which is what CANDE expects of a field the
+    user has no value for.  The line type is positional-only so that name
+    stays usable as a field keyword -- D-1 has one.
+    """
+    spec = spec_for(name)
+    if spec is None:
+        raise KeyError(f"{name!r} has no field spec, so a record cannot be built for it")
+    record = Record(CommandLine(name, ""), spec)
+    for field_name, value in fields.items():
+        record = record.set(field_name, value)
+    return record
+
+
 @dataclass(frozen=True, slots=True)
 class Document:
     """One ``.cid`` file, in order."""
@@ -152,6 +169,29 @@ class Document:
 
     def count(self, name: str) -> int:
         return sum(1 for _ in self.records(name))
+
+    def inserted(self, index: int, *lines: Line) -> Document:
+        """Return a copy with ``lines`` inserted before position ``index``."""
+        kept = list(self.lines)
+        return replace(self, lines=(*kept[:index], *lines, *kept[index:]))
+
+    def removed(self, *indices: int) -> Document:
+        """Return a copy with the lines at ``indices`` removed."""
+        drop = frozenset(indices)
+        return replace(
+            self, lines=tuple(line for i, line in enumerate(self.lines) if i not in drop)
+        )
+
+    def after_last(self, *names: str) -> int:
+        """The position just past the last record named in ``names``.
+
+        Returns ``len(self)`` when none is present, so an insertion still lands
+        somewhere sensible rather than at the top of the file.
+        """
+        last = -1
+        for index, _ in self.records(*names):
+            last = index
+        return last + 1 if last >= 0 else len(self.lines)
 
     def replaced(self, index: int, line: Line) -> Document:
         """Return a copy with the line at ``index`` replaced."""

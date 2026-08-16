@@ -122,6 +122,28 @@ class _Session:
         self.path = Path(name)
         self.dirty = True
 
+    def insert_interfaces(self, beams: list[int], properties: dict[str, Any]) -> dict[str, Any]:
+        """Run the interface operation and report what it did."""
+        from candejar.ops import insert_interfaces
+
+        if self.problem is None:
+            return {"created": 0, "skipped": []}
+        result = insert_interfaces(
+            self.problem,
+            beams,
+            friction=float(properties.get("friction", 0.3)),
+            tensile=float(properties.get("tensile", 0.0)),
+            gap=float(properties.get("gap", 0.0)),
+        )
+        if result.created:
+            self.problem = Problem(result.document)
+            self.dirty = True
+        return {
+            "created": result.created,
+            "summary": result.summary,
+            "skipped": [{"node": s.node, "reason": s.reason} for s in result.skipped],
+        }
+
     def apply(self, edits: list[dict[str, Any]]) -> int:
         """Apply field edits by document line index. Returns the number applied."""
         if self.problem is None:
@@ -202,6 +224,14 @@ class _Handler(BaseHTTPRequestHandler):
                 applied = self.session.apply(self._read_json().get("edits", []))
                 state = self._state()
                 state["applied"] = applied
+                self._send_json(state)
+            elif self.path == "/api/interfaces":
+                body = self._read_json()
+                outcome = self.session.insert_interfaces(
+                    [int(n) for n in body.get("beams", [])], body.get("properties", {})
+                )
+                state = self._state()
+                state["operation"] = outcome
                 self._send_json(state)
             elif self.path == "/api/save":
                 self._save(self._read_json())

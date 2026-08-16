@@ -146,6 +146,42 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_interfaces(args: argparse.Namespace) -> int:
+    from candejar.io import write_cid
+    from candejar.model import ElementKind
+    from candejar.ops import insert_interfaces
+
+    style = _Style(_use_colour(sys.stdout))
+    problem = Problem(read_cid(args.file))
+    beams = [
+        element.number
+        for element in problem.elements.values()
+        if element.kind is ElementKind.BEAM
+        and (args.group is None or element.material == args.group)
+    ]
+    if not beams:
+        where = f" in pipe group {args.group}" if args.group else ""
+        print(f"candejar: no beam elements found{where}", file=sys.stderr)
+        return 1
+
+    result = insert_interfaces(
+        problem, beams, friction=args.friction, tensile=args.tensile, gap=args.gap
+    )
+    print(result.summary)
+    for skipped in result.skipped:
+        print(style.dim(f"  node {skipped.node}: {skipped.reason}"))
+    if not result.created:
+        return 0
+
+    target = args.output or args.file
+    if args.dry_run:
+        print(style.dim(f"  (dry run; would have written {target})"))
+        return 0
+    write_cid(result.document, target)
+    print(style.dim(f"  written to {target}"))
+    return 0
+
+
 def _cmd_types(args: argparse.Namespace) -> int:
     from candejar.io import LINE_TYPES
 
@@ -210,6 +246,18 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--port", type=int, default=8737)
     serve.add_argument("--no-browser", action="store_true")
     serve.set_defaults(func=_cmd_serve)
+
+    interfaces = sub.add_parser(
+        "interfaces", help="insert interface elements between the structure and the soil"
+    )
+    interfaces.add_argument("file", type=Path)
+    interfaces.add_argument("-o", "--output", type=Path, help="write here instead of in place")
+    interfaces.add_argument("--group", type=int, help="only this pipe group (default: all beams)")
+    interfaces.add_argument("--friction", type=float, default=0.3)
+    interfaces.add_argument("--tensile", type=float, default=0.0, help="tensile force capacity")
+    interfaces.add_argument("--gap", type=float, default=0.0, help="initial gap distance")
+    interfaces.add_argument("--dry-run", action="store_true", help="report without writing")
+    interfaces.set_defaults(func=_cmd_interfaces)
 
     types = sub.add_parser("types", help="list the line types candejar understands")
     types.add_argument("file", nargs="?", type=Path)
