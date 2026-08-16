@@ -1,16 +1,42 @@
 # CANDE `.cid` input format — verified notes
 
 **Sources**
-- *CANDE-2013 Culvert Analysis and Design — User Manual and Guideline*, §5 "Detailed CANDE
-  Input" (pages 5-151 … 5-175 read directly). Page footers in that range read
-  "CANDE-2012 User Manual"; the file is the 2013 release.
-- *CANDE-2024 Solution Methods and Formulations* (present; input instructions not in it).
-- One real Level 3 file: `NDS-45 18in cover w all short term E ASD per testing SW100.cid`
-  — 2,433 lines, 800 nodes, 1,288 elements, 70 boundary conditions, 24 materials,
-  9 pipe groups.
+- ***CANDE-2025 Culvert Analysis and Design — User Manual and Guideline***, Michael G.
+  Katona, April 2025, 338 pp. **This is the authority** — it states it "supersedes all
+  previous user manuals."
+- *CANDE-2013 User Manual*, §5 (pages 5-151 … 5-175 read directly) — used for the Level 3
+  column tables, which the 2025 manual confirms unchanged.
+- *CANDE-2024 / 2025 Solution Methods and Formulations* (present; input instructions not
+  in them).
+- Two real files, structurally very different, both from the `CID Files` corpus:
+  - `NDS-45 18in cover … SW100.cid` — Level 3, 2,433 lines, 1,288 elements, 70 boundary
+    conditions, 24 materials, 9 pipe groups.
+  - `ADAMS FORK Level2-ANALYS-WSD-TREN-Pipe-PLASTIC-SMOOTH.cid` — Level 2, 22 lines.
 
-Everything below marked **verified** was confirmed against both the manual and that file.
+Everything below marked **verified** was confirmed against both a manual and a real file.
 Anything else is flagged.
+
+---
+
+## 0. The finding that matters most
+
+From the CANDE-2025 User Manual, page viii, first bullet:
+
+> "The Graphical User Interface (GUI) used for the 'screen mode' input method of generating
+> a CANDE input file **has not been fully updated for the new capabilities.** Therefore,
+> when exercising a new capability, **it is required to enter the relevant data directly on
+> the CANDE input-file ('batch mode')** by following the input instructions given in
+> Chapter 5."
+
+> "For clarity, the input instructions that relate to the new capabilities are written in
+> **red ink** to remind the user that this input data must be entered via batch mode."
+
+Everything added to CANDE since 2011 — Mohr/Coulomb, the modified Duncan/Selig unload
+model, Continuous Load Scaling, composite links, full pavement benefits for load rating,
+and the April-2025 thermoplastic design criteria — is **unreachable from the official GUI**.
+The vendor's own answer is: hand-edit fixed-column text and watch for the red ink.
+
+That is the case for this project, stated by the program's author.
 
 ---
 
@@ -76,8 +102,52 @@ are marked ✓ with their observed count.
 **Seven pipe types**, not five: Aluminum, Concrete, Plastic, Steel, Basic, **CONRIB**
 (rib-shaped / fibre-reinforced concrete), **CONTUBE** (concrete in FRP tubes).
 
-`C-2b.L3` appears in the real file but is not in the section list I read — a CANDE-2013
-addition. This is exactly why unparsed lines must round-trip verbatim.
+`C-2b.L3` appears in the real file but is absent from the CANDE-2013 section list — it is a
+**CANDE-2017 addition** for Continuous Load Scaling (see §5). Exactly why unparsed lines
+must round-trip verbatim: a tool built on the 2013 manual would have silently not known
+about it.
+
+### Level 2 line names — **verified**
+
+The Level 2 file confirms the prefix rule holds for a completely different file shape, and
+gives the Level 1/2 naming: `A-2.L12` (Levels 1 and 2 share it, versus `A-2.L3`), then
+`C-1.L2.Pipe`, `C-2.L2.Pipe`, `C-3.L2.Pipe`, `C-4.L2.Pipe` — with `.Box` and `.Arch`
+variants for the other two canned families. `D-3.Duncan` and `D-4.Duncan` also appear.
+
+```
+                      A-1!!ANALYS   2 0  1ADAMS FORK 24 " SDR=17          -99    0    0    0
+                  A-2.L12!!PLASTIC   1
+              C-1.L2.Pipe!!TREN New Level 2 Pipe Mesh
+              C-2.L2.Pipe!!     22.59         1      71.8       115
+                      D-1!!    3    3       115USER                10
+               D-2.Duncan!!    0       0.5    1
+               D-3.Duncan!!         0        42      14.4       587      0.75      0.75
+               D-4.Duncan!!        41      0.05         0
+STOP
+```
+
+A whole Level 2 model is 22 lines. The equivalent Level 3 model is thousands.
+
+---
+
+## 2a. New capabilities since 2011 — **all batch-mode only**
+
+| Capability | Added | Input lines |
+|---|---|---|
+| CONRIB pipe type (rib-shaped / fibre-reinforced concrete) | 2012 | `A-2`, `B-1`…`B-6` |
+| CONTUBE pipe type (concrete in FRP tubes) | 2013 | `A-2`, `B-1`…`B-6` |
+| **Link elements with death option** | 2013 | `C-4` |
+| Deeply corrugated steel (AASHTO 12.8.9.5-1, 12.8.9.6-1) | 2013 | `B-*` Steel |
+| Plastic variable profile properties around the periphery | 2013 | `B-3`, `B-3b` Plastic |
+| **Mohr/Coulomb elastoplastic soil model** | 2015; non-associative 2017 | `D-1`, `D-2` |
+| **Modified Duncan/Selig** — permanent deformation on unload | 2015; vetted 2017 | `D-2.Duncan` |
+| **Continuous Load Scaling (CLS)** | 2017; 3D pavement 2022 | `C-2` `Iscale`, `C-2b`, `C-2c` |
+| **Composite link element** | Dec 2022 | `C-4` codes 10, 11 |
+| Full pavement benefit for load rating (AAMP-θ\*) | Jan 2022 | `C-2b` `Ipave3D`, `C-2c` |
+| Updated thermoplastic design criteria — thrust-strain limit, new global buckling, mixed-term loading | **April 2025** | `B-*` Plastic |
+
+Six of these eleven post-date the CANDE-2013 manual entirely. Any tool must reference the
+2025 manual, even though the Level 3 column tables themselves turn out to be unchanged.
 
 ---
 
@@ -164,7 +234,7 @@ Two features worth exploiting in a generator:
 
 ---
 
-## 5. `C-2.L3` — key control variables — **verified**
+## 5. `C-2.L3` — key control variables — **verified against CANDE-2025**
 
 | Cols | Name | Meaning | Sample |
 |---|---|---|---|
@@ -172,22 +242,48 @@ Two features worth exploiting in a generator:
 | 06-10 | `MGENPR` | mesh generation / print control | 3 |
 | 11-15 | `NPUTCK` | input check control | 0 |
 | 16-20 | `IPLOT` | plot control | 3 |
-| 21-25 | `IWRT` | write control | 1 |
-| 26-30 | `NPT` | **number of nodes** | 800 ✓ = 800 `C-3` lines |
-| 31-35 | `NELEM` | **number of elements** | 1288 ✓ = 1288 `C-4` lines |
-| 36-40 | `NBPTC` | **number of boundary condition lines** | 70 ✓ = 70 `C-5` lines |
-| 41-45 | `NSMAT` | number of soil materials | 9 |
-| 46-50 | `NXMAT` | number of interface materials | 25 |
-| 51-55 | `MINBW` | minimum bandwidth flag | 1 |
-| 56-60 | (unlabelled in the pages read) | | 2 |
+| 21-25 | `IWRT` | response print: 0 minimal · 1 standard · 2 +Duncan trace · 3 +interface trace · **4 +Mohr/Coulomb trace** | 1 |
+| 26-30 | `NPT` | **highest node number used** — *not* the node count | 800 |
+| 31-35 | `NELEM` | element count — **must match exactly** | 1288 |
+| 36-40 | `NBPTC` | boundary-condition count — **upper bound**, may exceed actual | 70 |
+| 41-45 | `NSMAT` | soil material count — **GUI-only hint, ignored in batch input** | 9 |
+| 46-50 | `NXMAT` | interface material count — **GUI-only hint** | 25 |
+| 51-55 | `MINBW` | bandwidth minimiser: 0 none · 1 minimise · 2 minimise and print | 1 |
+| 56-60 | `Iscale` | **Continuous Load Scaling**: 0 off · 1 CLS-EBM · 2 CLS-AAM-θ\* | 2 |
 
-`NPT`, `NELEM`, and `NBPTC` match the actual line counts exactly. `NSMAT` (9) and
-`NXMAT` (25) **exceed** the materials actually defined (5 and 19) — so they are declared
-capacities or stale values, not exact counts. A validator should treat
-`NSMAT >= max soil material id` as the rule, not equality.
+Three of these are **not counts**, which matters for a writer:
 
-`MINBW` being an input parameter confirms that **bandwidth is a first-class CANDE concern**,
-which is an argument for doing node renumbering at export time.
+- **`NPT` is the highest node *number*, not how many nodes there are.** CANDE explicitly
+  permits skipped node numbers. Writing a count here is wrong whenever the numbering has
+  gaps.
+- **`NBPTC` may be larger than the actual count** — the manual recommends "some
+  sufficiently large number, say 200."
+- **`NSMAT` and `NXMAT` are used only by the GUI** and "may be ignored for batch input."
+  That explains the sample file's 9 and 25 against 5 and 19 actually defined.
+
+*(Manual erratum: the `NXMAT` description says interface materials are "identified in line
+C-4 with variable `IX(7)`". `IX(7)` is the element-class code; the interface material number
+is `IX(5)`. Don't implement from that sentence.)*
+
+`MINBW` confirms that **bandwidth is a first-class CANDE concern**, which is an argument for
+doing node renumbering at export time.
+
+### `C-2b.L3` and `C-2c.L3` — Continuous Load Scaling
+
+Set `Iscale` = 1 or 2 and `C-2b.L3` becomes required; add pavement 3D benefits
+(`Ipave3D` = 1) and `C-2c.L3` is required too. `C-2b` carries: starting and ending live-load
+step (`LSstart`, `LSstop`, cols 01-05 / 06-10), wheel footprint length and width, axle
+spacing, soil-surface reference node, the 3DSE distribution widths `Wmin` and `Wcritical`,
+the pipe-group range for 3DSE, and `Ipave3D`.
+
+The sample file's `C-2b.L3` record is `    9   10` — live load applied across steps 9→10,
+everything else defaulted — and its `Iscale` is 2, so it is already using **CLS-AAM-θ\***.
+This is one of the capabilities the CANDE GUI cannot author.
+
+Note the modelling consequence: under CLS the `C-5` boundary conditions carry the **actual
+service wheel load**, not an RSL-reduced load. Whether a file uses CLS therefore changes how
+its live loads must be *interpreted* — a preprocessor that shows live loads without reading
+`Iscale` will mislabel them.
 
 ---
 
@@ -253,6 +349,14 @@ Defects in the current editor that this investigation newly confirms:
 - **Only `IX(6)` birth step is modelled.** Link elements have a *death* step (CANDE-2013
   added element removal, for temporary supports, excavation, or void creation); nothing in
   the current data model can represent it.
+- **`NPT` is written as a node count.** `_update_c2_line()` sets the `NPT` field to
+  `len(self.nodes)`. `NPT` is the *highest node number used*, and CANDE explicitly permits
+  gaps in node numbering. Any model with skipped numbers gets an `NPT` that is too small.
+  The same routine treats `NSMAT`/`NXMAT` as values to grow monotonically, when the manual
+  says they are GUI-only hints ignored on batch input.
+- **`Iscale` is invisible.** A file using Continuous Load Scaling carries unreduced service
+  wheel loads on its `C-5` lines. Nothing in the current tool reads `C-2`, so it cannot tell
+  a CLS model from an RSL one — and the two mean different things by the same numbers.
 
 ## 9. Beyond the input file
 

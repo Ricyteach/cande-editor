@@ -4,12 +4,46 @@
 **Author:** drafted for Rick Teachey
 **Scope:** replaces `cande-editor` v2.0 in its entirety
 
-> **Update — format now verified.** The CANDE-2013 User Manual and a real 2,433-line
-> Level 3 file have been read. The `.cid` format is pinned in
-> [`docs/CID-FORMAT.md`](CID-FORMAT.md); the illustrative column table in §4.2 below has
-> been replaced with the verified one, and §1.5 records the extra defects that came out of
-> the comparison. Nothing in the architecture changed — the codec turned out to be
-> *simpler* than assumed.
+> **Update — format verified against CANDE-2025.** The CANDE-2025 User Manual (April 2025,
+> which "supersedes all previous user manuals") and two structurally different real files
+> have been read. The format is pinned in [`docs/CID-FORMAT.md`](CID-FORMAT.md); §4.2 below
+> now carries the verified column table, and §1.4 the extra defects. Nothing in the
+> architecture changed — the codec turned out *simpler* than assumed. But §0 changed the
+> case for the project entirely.
+
+---
+
+## 0. The strongest argument is in CANDE's own manual
+
+CANDE-2025 User Manual, page viii, first bullet:
+
+> "The Graphical User Interface (GUI) used for the 'screen mode' input method of generating
+> a CANDE input file **has not been fully updated for the new capabilities.** Therefore,
+> when exercising a new capability, **it is required to enter the relevant data directly on
+> the CANDE input-file ('batch mode')** by following the input instructions given in
+> Chapter 5."
+>
+> "For clarity, the input instructions that relate to the new capabilities are written in
+> **red ink** to remind the user that this input data must be entered via batch mode."
+
+Eleven capabilities have been added to CANDE since 2011. **Every one of them is
+unreachable from the official GUI.** Among them:
+
+- Mohr/Coulomb elastoplastic soil model
+- Modified Duncan/Selig with permanent deformation on unload
+- Continuous Load Scaling — the modern replacement for reduced surface loads
+- Composite link elements; link elements with a death step
+- Full pavement benefit for load rating (AAMP-θ\*)
+- The April-2025 thermoplastic design criteria (thrust-strain limit, new global buckling)
+
+The vendor's answer is to hand-edit fixed-column text and watch for red ink in a 338-page
+PDF. Your own files already depend on this: the sample Level 3 model runs `Iscale = 2`,
+i.e. CLS-AAM-θ\*, which no GUI can author or even display.
+
+This is no longer a proposal to build a nicer editor. **The official preprocessor stopped
+covering the program a decade ago, and the gap widens with each release.** A tool that
+simply parses the whole current format — before any mesh generation, before any of the
+ambitious parts — closes a gap that nothing else closes.
 
 *"Strata" is a suggested working name — CANDE's central idea is incremental
 construction in layers, which is also how the software should be built. Rename
@@ -486,22 +520,23 @@ at the end of Phase 1, about a month in.
 
 ## 8. What I need from you
 
-Items 1 and 2 are **received** — OneDrive access supplied the CANDE-2013 User
-Manual, the CANDE-2024 Solution Methods manual, and a large set of real project
-files. What remains:
+Items 1 and 2 are **received and then some**. `OneDrive/CID Files/` holds the
+**CANDE-2025 User Manual and program package** plus a corpus with genuinely good
+spread — Level 2 and Level 3, box / arch / 2-radius / double-radius / pipe,
+concrete / steel gauges / plastic, HS-20 / tandem / HL-93, factored and service,
+quad and triangle meshes, with-and-without-interface pairs, and files from 1.3 KB
+to 908 KB. That is enough to build the codec against. What remains:
 
 1. **A `.cid` MIME workaround.** The connector refuses `.cid` (SharePoint reports
    `application/octet-stream`, which is not on its allow-list). Copying a file and
-   renaming it `.cid.txt` works — one is staged in `OneDrive/_claude_cid_readable/`
-   as a proof. For a real corpus, the cleanest fix is a folder of `.txt` copies, or
-   committing a handful of anonymised files into the repo as test fixtures. **The
-   repo is the better home** — the corpus belongs under version control next to the
-   round-trip tests.
-2. **Spread in the corpus.** The files seen so far are large Level 3 plastic models.
-   The codec needs coverage of the other pipe types (concrete, steel, aluminum,
-   CONRIB, CONTUBE), Level 1 and Level 2 (including the `CX-*` extended lines),
-   LRFD files with `E-1`, and models using link elements — plus a few CANDE
-   rejected, since those pin down the validation rules.
+   renaming it `.cid.txt` works — two are staged in `OneDrive/_claude_cid_readable/`
+   as proof. For the real corpus, **the repo is the better home**: a set of
+   anonymised fixtures under version control next to the round-trip tests. Say the
+   word and I'll delete the staging folder.
+2. **A few gaps in the spread.** No aluminum, CONRIB, or CONTUBE model spotted yet;
+   nothing obviously using link elements or the `CX-*` extended-Level-2 lines; and
+   no examples CANDE *rejected* — those last ones pin down the validation rules
+   better than any number of valid files.
 3. **Three decisions:**
    - Qt desktop as recommended, or web?
    - Level 3 only at first, or Level 1/2 in the model from the start?
