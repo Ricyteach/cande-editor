@@ -64,6 +64,24 @@ class CommandLine(NamedTuple):
             raise ValueError(f"invalid column range {start}-{end}")
         return self.record[start - 1 : end].ljust(end - start + 1)
 
+    def with_field(self, start: int, end: int, text: str) -> CommandLine:
+        """Return a copy with columns ``start``..``end`` replaced by ``text``.
+
+        Only those columns change: every other byte of the record is carried
+        through untouched.  Writing a field therefore cannot disturb a field the
+        codec does not yet understand, which is what makes it safe to edit files
+        containing line types this version has never seen.
+        """
+        width = end - start + 1
+        if start < 1 or end < start:
+            raise ValueError(f"invalid column range {start}-{end}")
+        if len(text) != width:
+            raise ValueError(
+                f"expected {width} characters for columns {start}-{end}, got {len(text)}"
+            )
+        padded = self.record.ljust(end)
+        return self._replace(record=padded[: start - 1] + text + padded[end:])
+
 
 def split_line(text: str) -> CommandLine | None:
     """Split one line of a ``.cid`` file.
