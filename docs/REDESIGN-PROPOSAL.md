@@ -1,6 +1,8 @@
 # candejar — a proposal to rebuild this into a real CANDE preprocessor
 
-**Status:** approved — **Phase 0 complete**, Phase 1 next
+**Status:** approved — **Phases 0-2 complete and Phase 3 begun.** `pip install -e .`
+gives a working tool: `candejar check / show / fmt / diff / types / serve`. Mesh
+generation (Phase 4) and solver integration (Phase 5) are not built.
 **Author:** drafted for Rick Teachey
 **Scope:** replaces `cande-editor` v2.0 in its entirety
 
@@ -543,7 +545,7 @@ is genuinely painful.
 Six phases. Each one ships something usable on its own; none of them requires the
 next one to justify itself.
 
-### Phase 0 — Foundations *(~1 week)*
+### Phase 0 — Foundations — **done**
 `src/` layout, **the `candejar` / `candejar_pro` package split and licences
 settled** (§4.6), working `pyproject.toml`, pytest + ruff + mypy in CI, `.cid`
 test corpus assembled as fixtures. The current `tests/utils/…` file moves to
@@ -551,7 +553,7 @@ test corpus assembled as fixtures. The current `tests/utils/…` file moves to
 **You get:** a repo that builds and tests, with the commercial boundary in place
 before any code depends on it being elsewhere.
 
-### Phase 1 — Codec and model *(~3 weeks)*
+### Phase 1 — Codec and model — **done**
 `candejar.io` + `candejar.model`. All line types the corpus exercises across **Levels 1,
 2 and 3** — including the canned-mesh families (`A-2.L12`, `C-1…C-4.L2.Pipe/Box/Arch`)
 and the `CX-1…CX-4` extended-Level-2 lines — with `RawLine` pass-through for the
@@ -564,7 +566,7 @@ tell you what's wrong with a `.cid` before you run it. No UI needed.
 are data entry. Worth it because a validator that accepts anything dropped on it is
 a far better first impression than "unsupported file."*
 
-### Phase 2 — Operations and validation *(~3 weeks)*
+### Phase 2 — Operations and validation — **done** (21 rules; ops beyond field assignment still to come)
 `candejar.ops` and `candejar.validate`. Assign material/step, insert interface
 elements **correctly** (with the duplicate-creation bug gone and the angle
 fallback made explicit), renumber, delete, mirror. Rule engine with severities
@@ -579,7 +581,7 @@ site or a subdomain with no backend.
 **You get:** a lead source running about six weeks in, while everything after it is
 still being built — and a public artefact that demonstrates the tool works.
 
-### Phase 3 — The full web application *(~5 weeks)*
+### Phase 3 — The full web application — **in progress**: viewer, selection, inspector, field editing and save all work
 The editor: mesh rendering coloured by material, step or soil model; selection
 sets; undo/redo; a validation panel that zooms to findings; property editors for
 soil and structural materials — including the models the CANDE GUI cannot reach.
