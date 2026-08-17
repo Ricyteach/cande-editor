@@ -86,6 +86,51 @@ def payload_for(problem: Problem, path: Path | None) -> dict[str, Any]:
             }
             for b in problem.boundaries
         ],
+        "pipeGroups": [
+            {
+                "number": g.number,
+                "pipeType": g.pipe_type,
+                "elements": g.elements,
+                "cannedMesh": g.canned_mesh,
+                "wallType": g.wall_type,
+                "index": g.index,
+                "material": (
+                    {
+                        "modulus": g.material.modulus,
+                        "poisson": g.material.poisson,
+                        "yieldStress": g.material.yield_stress,
+                        "seamStrength": g.material.seam_strength,
+                        "density": g.material.density,
+                        "modulusLongTerm": g.material.modulus_long_term,
+                        "strengthLongTerm": g.material.strength_long_term,
+                    }
+                    if g.material
+                    else None
+                ),
+                "section": (
+                    {
+                        "area": g.section.area,
+                        "inertia": g.section.inertia,
+                        "sectionModulus": g.section.section_modulus,
+                        "plasticModulus": g.section.plastic_modulus,
+                    }
+                    if g.section
+                    else None
+                ),
+                "profile": [
+                    {
+                        "period": b.period,
+                        "height": b.height,
+                        "webAngle": b.web_angle,
+                        "webThickness": b.web_thickness,
+                        "nodeFirst": b.node_first,
+                        "nodeLast": b.node_last,
+                    }
+                    for b in g.profile
+                ],
+            }
+            for g in problem.pipe_groups
+        ],
         "steps": list(problem.steps()),
         "findings": [
             {

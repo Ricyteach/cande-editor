@@ -116,12 +116,16 @@ Nine fixtures, spanning Levels 1–3, steel/plastic/concrete/aluminum, both
 analysis and design mode, and — since the corpus sweep — quadrilateral elements
 and LRFD. Round-trip is verified byte-exact against 2,886 real files.
 
-The steel and aluminum Part B lines are catalogued, and `Problem.pipe_groups`
-surfaces them: each group carries its `PipeMaterial` and `PipeSection` (area,
-moment of inertia, section modulus **per unit length**). That is what a section
-library or a viewer binds to. A group whose pipe type has no spec yet — plastic,
-concrete, CONRIB, CONTUBE — has `material is None` rather than a wrong one.
+Steel, aluminum and plastic Part B are catalogued, and `Problem.pipe_groups`
+surfaces them end to end: each group carries its `PipeMaterial` and
+`PipeSection` (area, moment of inertia, section modulus **per unit length**),
+its `wall_type`, and for a profile wall a `ProfileBand` per node range. The
+viewer's **Pipe groups** panel renders all of it. That is what a section library
+binds to. A group whose pipe type has no spec — concrete, CONRIB, CONTUBE — has
+`material is None` rather than a wrong one, and the panel says so in words.
 
 Still uncovered: link elements, CONRIB and CONTUBE (which occur in no known
-file), plastic's Part B lines, and 35 command names that have no spec and so
-round-trip verbatim.
+file), concrete's Part B lines, and 30 command names that have no spec and so
+round-trip verbatim. `B-3.Plastic.A.Smooth` is uncatalogued *deliberately* —
+the manual and real files disagree about which column holds the wall thickness,
+and §3 of `docs/CORPUS-FINDINGS.md` explains why guessing was refused.

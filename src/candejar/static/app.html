@@ -160,6 +160,37 @@ dl.summary dd{color:var(--ink);text-align:right;font-variant-numeric:tabular-num
 .detail dt{color:var(--muted)}
 .detail dd{text-align:right;font-variant-numeric:tabular-nums}
 
+/* ---------------------------------------------------------- pipe groups */
+.grp{
+  width:100%;display:flex;align-items:center;gap:8px;text-align:left;
+  padding:7px 8px;border-radius:6px;border:1px solid transparent;
+}
+.grp:hover{background:var(--sunk)}
+.grp.open{background:var(--accent-soft);border-color:var(--accent)}
+.grp .no{font-family:var(--mono);font-size:11px;color:var(--muted);min-width:16px}
+.grp .what{flex:1;font-size:12.5px;color:var(--ink)}
+.grp .what em{font-style:normal;color:var(--muted);font-size:11.5px}
+.grp .caret{color:var(--muted);font-size:10px;transition:transform .12s}
+.grp.open .caret{transform:rotate(90deg)}
+.grp-body{padding:2px 8px 12px}
+.grp-body .sub{font-size:10.5px;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.08em;margin:10px 0 5px}
+.grp-body .sub:first-child{margin-top:2px}
+.grp-body dl.summary dd{font-family:var(--mono);font-size:11.5px}
+.grp-body .unit{color:var(--muted);font-size:10px;margin-left:2px}
+.grp-body .absent{font-size:11.5px;color:var(--muted);line-height:1.45;
+  background:var(--sunk);border-radius:5px;padding:8px 9px}
+.grp-body .absent code{font-family:var(--mono);font-size:11px;color:var(--ink-2)}
+.grp-show{margin-top:10px;font-size:11.5px;color:var(--accent);
+  border:1px solid var(--rule);border-radius:5px;padding:5px 8px;width:100%}
+.grp-show:hover{border-color:var(--accent);background:var(--accent-soft)}
+.grp-show:disabled{opacity:.55;cursor:not-allowed;color:var(--muted)}
+.bands{font-size:11.5px;color:var(--ink-2);display:grid;gap:2px;
+  max-height:132px;overflow-y:auto}
+.bands .b{display:grid;grid-template-columns:auto 1fr;gap:8px;
+  font-variant-numeric:tabular-nums}
+.bands .b span:first-child{color:var(--muted);font-family:var(--mono);font-size:10.5px}
+
 /* --------------------------------------------------------------- hint */
 #hint{
   position:absolute;left:50%;bottom:16px;transform:translateX(-50%);
@@ -270,7 +301,7 @@ const KIND_LABEL = {
 };
 
 const S = {
-  data:null, sel:new Set(), hover:null, colour:"material",
+  data:null, sel:new Set(), hover:null, colour:"material", openGroup:null,
   hidden:new Set(), activeFinding:null,
   view:{x:0, y:0, k:1}, drag:null, box:null,
 };
@@ -289,7 +320,7 @@ function showEmpty(){
   $("empty").style.display = "flex"; canvas.hidden = true; $("hint").hidden = true;
 }
 function adopt(state){
-  S.data = state; S.sel.clear(); S.activeFinding = null;
+  S.data = state; S.sel.clear(); S.activeFinding = null; S.openGroup = null;
   $("app").classList.remove("empty"); $("side").hidden = false;
   $("empty").style.display = "none"; canvas.hidden = false;
   $("filename").textContent = state.name;
@@ -355,6 +386,8 @@ function renderPanels(){
     }
   }
 
+  out.push(pipeGroupPanel(d));
+
   if (Object.keys(d.uncatalogued||{}).length){
     const rows = Object.entries(d.uncatalogued).sort()
       .map(([n,c]) => `<dt>${esc(n)}</dt><dd>${c.toLocaleString()}</dd>`).join("");
@@ -373,6 +406,148 @@ function renderPanels(){
     el.onclick = () => { toggleSet(S.hidden, el.dataset.kind); renderPanels(); draw(); });
   $("panels").querySelectorAll("[data-colour]").forEach(el =>
     el.onclick = () => setColour(el.dataset.colour));
+  $("panels").querySelectorAll("[data-group]").forEach(el =>
+    el.onclick = () => {
+      const n = +el.dataset.group;
+      S.openGroup = S.openGroup === n ? null : n;
+      renderPanels();
+    });
+  $("panels").querySelectorAll("[data-groupshow]").forEach(el =>
+    el.onclick = () => showGroupOnDrawing(+el.dataset.groupshow));
+}
+
+/* Pipe groups.  A group's material and section live in Part B, which repeats
+   once per group; the panel is the only place they surface.  It stays a list
+   of one-line rows until you open one, because a Level 3 file can carry nine
+   groups and showing every property of each at once is a wall, not an aid. */
+function pipeGroupPanel(d){
+  const groups = d.pipeGroups || [];
+  if (!groups.length) return "";
+  // With a single group there is nothing to choose between, so open it.
+  if (S.openGroup === null && groups.length === 1) S.openGroup = groups[0].number;
+
+  const rows = groups.map(g => {
+    const open = S.openGroup === g.number;
+    const bits = [];
+    // Prefer the beams actually present over the declared NPMATX: the drawing
+    // shows the former, and in 152 of 3,549 corpus groups they disagree.
+    const actual = beamsOf(d, g.number).length;
+    if (d.hasMesh && actual) bits.push(`${actual} beam${actual === 1 ? "" : "s"}`);
+    else if (g.elements != null) bits.push(`${g.elements} declared`);
+    if (g.cannedMesh != null) bits.push(`canned mesh ${g.cannedMesh}`);
+    if (g.wallType) bits.push(g.wallType.toLowerCase() + " wall");
+    return `<button class="grp${open ? " open" : ""}" data-group="${g.number}"
+              aria-expanded="${open}">
+        <span class="no">${g.number}</span>
+        <span class="what">${esc(g.pipeType || "unspecified")}${
+          bits.length ? `<em> · ${esc(bits.join(" · "))}</em>` : ""}</span>
+        <span class="caret">▶</span>
+      </button>` + (open ? groupBody(d, g) : "");
+  }).join("");
+
+  return panel("Pipe groups", rows,
+    `<span class="count">${groups.length}</span>`);
+}
+
+function groupBody(d, g){
+  const parts = [];
+  const m = g.material, s = g.section;
+
+  if (m){
+    const rows = [
+      ["Modulus", m.modulus, "psi"],
+      ["Poisson's ratio", m.poisson, ""],
+      ["Yield stress", m.yieldStress, "psi"],
+      ["Seam strength", m.seamStrength, "psi"],
+      ["Density", m.density, "pci"],
+      // Plastic creeps, so it is the one type with a duration-dependent pair.
+      ["Modulus, long term", m.modulusLongTerm, "psi"],
+      ["Strength, long term", m.strengthLongTerm, "psi"],
+    ].filter(r => r[1] != null);
+    parts.push(`<div class="sub">Material</div><dl class="summary">` +
+      rows.map(([k, v, u]) => `<dt>${k}</dt><dd>${num(v)}${
+        u ? `<span class="unit">${u}</span>` : ""}</dd>`).join("") + `</dl>`);
+  }
+
+  if (s){
+    const rows = [
+      ["Area", s.area, "in²/in"],
+      ["Moment of inertia", s.inertia, "in⁴/in"],
+      ["Section modulus", s.sectionModulus, "in³/in"],
+      ["Plastic modulus", s.plasticModulus, "in³/in"],
+    ].filter(r => r[1] != null);
+    if (rows.length) parts.push(
+      `<div class="sub">Section, per unit length</div><dl class="summary">` +
+      rows.map(([k, v, u]) => `<dt>${k}</dt><dd>${num(v)}<span class="unit">${u}</span></dd>`)
+        .join("") + `</dl>`);
+  }
+
+  if (g.profile && g.profile.length){
+    // A profile wall varies around the periphery: one section cannot describe it.
+    parts.push(`<div class="sub">Profile, ${g.profile.length} node range${
+      g.profile.length === 1 ? "" : "s"}</div><div class="bands">` +
+      g.profile.map(b => `<div class="b"><span>${
+        b.nodeFirst === b.nodeLast ? `node ${b.nodeFirst}`
+                                   : `nodes ${b.nodeFirst}–${b.nodeLast}`
+      }</span><span>height ${num(b.height)}, web ${num(b.webThickness)} at ${
+        num(b.webAngle)}°</span></div>`).join("") + `</div>`);
+  }
+
+  // An absent property is explained, never left as a blank the reader has to
+  // interpret.  The lines are in the file and preserved; they simply have no
+  // field table yet, so candejar will not guess at what the columns mean.
+  if (!parts.length){
+    parts.push(`<div class="absent">No properties to show.
+      The Part B lines for <code>${esc(g.pipeType || "this pipe type")}</code>
+      have no field table yet, so their columns are preserved exactly but not
+      read. Nothing is lost, and nothing is guessed.</div>`);
+  }
+
+  // State a disagreement rather than quietly showing one number: NPMATX is what
+  // the file claims, the beams are what it contains, and which is wrong is the
+  // engineer's call.  No validation rule asserts this -- 152 of 3,549 corpus
+  // groups disagree, and it is not known that CANDE rejected any of them.
+  const beams = beamsOf(d, g.number);
+  if (g.elements != null && d.hasMesh && g.elements !== beams.length){
+    parts.push(`<div class="absent">This group declares
+      <code>NPMATX = ${g.elements}</code>, but ${beams.length}
+      beam element${beams.length === 1 ? "" : "s"} reference${
+        beams.length === 1 ? "s" : ""} it.</div>`);
+  }
+
+  parts.push(beams.length
+    ? `<button class="grp-show" data-groupshow="${g.number}">Show its ${
+        beams.length} beam${beams.length === 1 ? "" : "s"} on the drawing</button>`
+    : `<button class="grp-show" disabled title="nothing to show">${
+        d.hasMesh ? "No beam elements reference this group"
+                  : "This file has no mesh to draw"}</button>`);
+
+  return `<div class="grp-body">${parts.join("")}</div>`;
+}
+
+/* Engineering values span 1e-3 to 1e7 here; neither raw toString nor a fixed
+   precision reads well across that range. */
+function num(v){
+  if (v == null) return "—";
+  const a = Math.abs(v);
+  if (a !== 0 && (a < 1e-4 || a >= 1e9)) return v.toExponential(3);
+  if (Number.isInteger(v)) return v.toLocaleString();
+  return String(parseFloat(v.toPrecision(6)));
+}
+
+/* A beam's IX(5) is its pipe group -- not a soil material, despite sharing the
+   column with one on other element types. */
+const beamsOf = (d, group) =>
+  (d.elements || []).filter(e => e.kind === "beam" && e.material === group);
+
+function showGroupOnDrawing(number){
+  const beams = beamsOf(S.data, number);
+  if (!beams.length) return;
+  S.sel = new Set(beams.map(e => e.n));
+  // Unhide beams, or the selection would be invisible and look broken.
+  S.hidden.delete("beam");
+  renderPanels(); renderInspector(); draw();
+  toast(`Selected ${beams.length} beam${beams.length === 1 ? "" : "s"} in pipe group ${number}`);
 }
 const panel = (title, body, badge="") =>
   `<section class="panel"><h2>${title}${badge}</h2>${body}</section>`;

@@ -117,6 +117,38 @@ aluminum is *not* steel with a different name: it has no joint-slip option, so
 `NONLIN` and `IBUCK` sit five columns earlier. Assuming the layouts matched
 would have read `NONLIN` out of `PE2`'s columns.
 
+### The plastic pass, and one line left uncatalogued on purpose
+
+| Spec | Manual | Lines | Files |
+|---|---|---:|---:|
+| `B-3b.Plastic.A.Profile` | 5.4.4.5 | 4,868 | 159 |
+| `B-3.Plastic.A.Profile` | 5.4.4.4 | 2,411 | 159 |
+| `B-2.Plastic` | 5.4.4.2 | 428 | 259 |
+| `B-1.Plastic` | 5.4.4.1 | 421 | 258 |
+| `B-4.Plastic` | 5.4.4.8 | 215 | 147 |
+
+Plastic is the one pipe type whose properties depend on load duration, because
+it creeps, so `PipeMaterial` gained long-term values. A profile wall is not
+uniform around the periphery, so no single section describes it; `PipeGroup`
+gained a `ProfileBand` per node range.
+
+**`B-3.Plastic.A.Smooth` was deliberately not catalogued.** The manual (5.4.4.3)
+puts `PT` — the wall thickness — at columns 11–20. Real files put it at 1–10:
+
+- 52 corpus lines for a `SMOOTH` wall carry a **single** value, at columns 1–10,
+  and the manual itself says `PT` alone "completes smooth wall input". That value
+  can only be the thickness.
+- In all seven distinct `GENERAL` records, the 4th value is *exactly* half the
+  1st — centroid = height/2 — which only holds under the shifted reading.
+- Against that, the `level3_plastic_asd` fixture carries five values and fits the
+  manual exactly, with `PI` = t³/12 and `PC` = t/2 to the digit.
+
+Both readings cannot be right. Getting it wrong would silently misreport a wall
+thickness in a buried-structure model, so the line stays verbatim until someone
+who can run CANDE settles it. `B-4.Plastic` is marked `partial` for a related
+reason: nine corpus lines carry a value at column 51 that the manual's table
+does not describe, and naming it would be a guess.
+
 ### A-2 was reporting a canned-mesh code as an element count
 
 Both `A-2` specs named columns 11–15 `elements`. The manual (5.3.2) gives two
@@ -185,11 +217,16 @@ in `CLAUDE.md` now states both halves of the property.
   `CONCRETE` (36), `BASIC` (18).
 - **Quadrilaterals are the norm**, not the exception: 2,269 files have them,
   though no fixture did until now.
-- 35 command names still have no spec, out of 55 that occur. The largest are
-  `B-3b.Plastic.A.Profile` (4,868 lines) and `B-3.Plastic.A.Profile` (2,411),
-  `B-4.Concrete.Case1_2` (2,158), and `D-3.Duncan` / `D-4.Duncan` (926 each).
-  Plastic is the obvious next material: second most common pipe type at 239
-  files, and its Part B lines are the largest remaining block.
+- 30 command names still have no spec, out of 55 that occur; 25 are catalogued,
+  19 of them from the manual. The largest remaining are
+  `B-4.Concrete.Case1_2` (2,158 lines), `D-3.Duncan` / `D-4.Duncan` (926 each),
+  and `B-1…B-3.Concrete` (223 each). Concrete is the obvious next material —
+  it is the last common pipe type with no Part B at all.
+- **152 of 3,549 pipe groups declare an `NPMATX` that disagrees with the number
+  of beam elements referencing them.** As with `NPGRPS` above, no rule was
+  written: 4.3% is far too high to assert on files that were presumably run.
+  The viewer states the disagreement where it occurs and leaves the judgement
+  to the engineer.
 - **67 Level 3 files declare more pipe groups than they define** — `A-1` gives
   `NPGRPS = 3` while the file carries one `A-2` and one Part B set. The reading
   is not in doubt: `NPGRPS` is columns 13–15, it decodes correctly on the
