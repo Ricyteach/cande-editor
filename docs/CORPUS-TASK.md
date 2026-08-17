@@ -1,150 +1,80 @@
-# Open task: broaden the test corpus from OneDrive
+# Corpus task — done, and what is left
 
-**Left by:** the session that built Phases 0–3, which lost its Microsoft 365
-connector partway through and could not finish this.
-**For:** any agent that *does* have OneDrive access.
-**Why it matters:** the codec's correctness is defined by the corpus, and the
-corpus is currently two files, both thermoplastic. Everything else in the project
-rests on specs that only two files have ever exercised.
+The sweep this file used to ask for has been run against the OneDrive
+`CID Files` folder, which by then held **2,886** `.cid` files and the CANDE-2025
+User Manual. The results are in [`CORPUS-FINDINGS.md`](CORPUS-FINDINGS.md).
 
-If you have the connector, please do this before starting new features.
+The short version: **`fmt` reported zero changed files** — there is no
+round-trip bug in the corpus — and 75% of its 9.3 million lines go through the
+field machinery rather than past it, so that is real evidence rather than an
+artefact of the verbatim fallback. Two validation rules were found to be crying
+wolf and were narrowed; `A-1` and a new `E-1` were promoted to `Source.MANUAL`;
+seven fixtures were added.
 
 ---
 
-## 1. Where things are
+## Still open
 
-| | |
-|---|---|
-| The files | `OneDrive/Documents/CID Files/` — roughly 200 `.cid` files |
-| The manual | `CID Files/CANDE-2025 User Manual.pdf` — 338 pp, April 2025, supersedes all earlier manuals |
-| Also there | `CANDE-2025 Program and Manuals package.zip` |
-| Scratch folder | `OneDrive/_claude_cid_readable/` — **created by me**, holds two `.cid.txt` copies. Reuse or delete it; the owner has been told it exists. |
+### 1. Decide what `Record.set()` should do about no-op writes
 
-## 2. The blocker you will hit, and the way round it
+The one unresolved correctness question. Re-encoding a field with the value just
+read from it does not reproduce the original bytes in 44 field kinds — `Real`
+drops the file's decimal places, `Whole` normalises `00` to ` 0`, and `Text`
+left-justifies past a leading space. Nothing corrupts a file today, but the
+`Text` case is a hazard wherever a column is load-bearing, and `MATNAM` at
+column 21 is exactly that. §4 of `CORPUS-FINDINGS.md` has the numbers and a
+proposed narrow fix. This is a change to the write path, so it wants an owner's
+decision, not a drive-by.
 
-The connector refuses `.cid` outright:
+### 2. Fixtures that could not be obtained
 
-```
-VALIDATION_ERROR: MIME type 'application/octet-stream' is not allowed
-```
+- **CONRIB and CONTUBE** — absent from all 2,886 files. Must come from elsewhere.
+- **Link elements** (`IX(7)` = 8–11) including the death step — 69 files have
+  them, smallest 98 KB. Needs a hand-built minimal reproducer.
+- **A file CANDE rejected** — best candidate is `14637 - Mesh2D Trial 6.cid`,
+  whose `C-4.L3` lines are correct through element 57 and shift one column right
+  from element 58 onward. ~100 KB; needs trimming.
 
-SharePoint reports `.cid` as `application/octet-stream`, which is not on
-`read_resource`'s allow-list. **Copy the file and rename it with a `.txt`
-suffix**, then read it:
+### 3. Line types still uncatalogued
 
-```
-sharepoint_copy_item(
-    driveId="b!f5_ubACxtkSPDIjpNocZI3qP9wxGgy5MqzHbkH05XjoHSilc4JwPRLI3QM2AKwn3",
-    itemId=<the .cid file>,
-    destinationParentItemId="01SKO6JUQ2E4AC5CZCK5DYLKIRYUM2DIGI",   # _claude_cid_readable
-    newName="whatever.cid.txt",
-)
-```
+41 command names have no spec. They round-trip verbatim, so adding them is safe
+and incremental — one spec, one test, in any order. By corpus weight:
 
-Large files exceed the token limit and get persisted to a local path instead of
-returned — that is *better*, not worse. Grep and analyse them on disk rather than
-pulling them into context.
+| Spec | Lines | Files | Manual section |
+|---|---:|---:|---|
+| `B-3b.Plastic.A.Profile` | 4,868 | 159 | 5.4.4.5 |
+| `B-1.Steel` | 2,468 | 2,076 | 5.4.5.1 |
+| `B-2.Steel.A` | 2,467 | 2,075 | 5.4.5.2 |
+| `B-3.Plastic.A.Profile` | 2,411 | 159 | 5.4.4.4 |
+| `B-4.Concrete.Case1_2` | 2,158 | 36 | 5.4.3.4 |
+| `B-3.Steel.AD.LRFD` | 1,956 | 1,795 | 5.4.5.8 |
+| `D-3.Duncan` / `D-4.Duncan` | 926 each | 292 | 5.6.4.2 / 5.6.4.3 |
+| `CX-1`…`CX-4` | 18–689 | 8–18 | 5.5.5.1–5.5.5.4 |
+| `C-1…C-4.L2.Pipe` / `.Arch` | 8–11 each | 8–11 | 5.5.2 / 5.5.4 |
 
-## 3. What to actually do
+`C-3.L3`, `C-5.L3` and `D-2.*` remain `INFERRED` and partial. `C-5.L3`'s
+`IIFLG` boundary codes (Table 5.5-7) are still not modelled at all.
 
-### 3a. Run `fmt` over everything — the highest-value check
+## Reading the manual
 
-```bash
-candejar fmt path/to/*.cid
-```
+`CID Files/CANDE-2025 User Manual.pdf`, 338 pages, April 2025, supersedes all
+earlier manuals. `pypdf`'s `extract_text()` handles it well enough to grep.
 
-`fmt` re-reads and re-renders each file and compares bytes. **Any file it reports
-as `CHANGED` is a codec bug**, and it is the single most valuable signal
-available: it means `candejar` would corrupt that file on save. Investigate every
-one. Do not "fix" it by loosening the round-trip test.
+Each input parameter is laid out as a stack — name, `(SYMBOL)`, `(01-05)`,
+`(I5)`, `(units)` — so the surest way to recover a column table is to find the
+section heading, then pull every line matching `^\s*\(\d+\s*-\s*\d+\)\s*$` with
+the three lines above it. Section `5-N` sits at roughly PDF page `N + 83`; for
+the 2013 manual it was `N + 87`.
 
-### 3b. Run `check` over everything — look for false positives
+Watch for the manual describing a stricter format than files actually use.
+Both false-positive rules and the `D-1` `MATNAM` question came from that gap:
+the manual's column table is what CANDE *reads*, which is not always what the
+GUI *writes*.
 
-```bash
-candejar check path/to/*.cid
-```
+## Scrubbing rule
 
-These are files CANDE accepted, so **errors are suspect until proven otherwise**.
-A rule that cries wolf is worse than a missing rule (invariant 5 in
-`CLAUDE.md`). When a rule fires wrongly, narrow the rule; when it fires rightly,
-keep it and note the file.
-
-### 3c. Add fixtures
-
-Wanted, roughly in priority order — the corpus has none of these:
-
-1. **Files CANDE rejected.** These pin down validation rules better than any
-   number of valid ones. Ask the owner if none are obvious.
-2. **Aluminum, CONRIB and CONTUBE** pipe types. Only Plastic is represented.
-3. **Link elements** — `IX(7)` of 8, 9, 10 or 11 — including the death step.
-   Nothing in the corpus exercises them, so `ElementKind.LINK_*` is untested
-   against reality.
-4. **`CX-1`…`CX-4`** extended-Level-2 lines.
-5. **LRFD files carrying `E-1`.** Both current fixtures are service/ASD.
-6. **Level 1** files, and box / arch / 2-radius geometries.
-7. **Concrete and steel**, which appear plentiful (`Box 32S…`, `27S BC BOX…`,
-   `BC 34A6…`, `CBC 16007…`).
-
-Candidates I noted but never read, with sizes — small ones make the best
-fixtures:
-
-```
-ADAMS FORK Level2-ANALYS-WSD-TREN-Pipe-PLASTIC-SMOOTH.cid    1,459   Level 2 trench
-ALSP 16x8-3 skeleton.cid                                     1,318
-BUCKEYE  22in  8-21-2012.cid                                 1,355
-BC 34A6 design gage determination.cid                        4,872   design mode?
-72''.cid  /  84''.cid                                        6,778
-ALSP 16x8-3 pinned load combo 3.cid                         30,591
-BC 34A6 Footing Reactions - LRFD FACTORED.cid               46,845   LRFD
-CONTECH Blue Heron.cid                                      48,745
-2.9' cover HS20.cid                                         94,270   box culvert
-27S BC BOX 3ga 2.75' cover ... HS-20 truck.cid              93,892   steel box
-Box 32S 4.0ft Cover 3Gage HL-93.cid                         97,096
-22406 quad.cid                                             236,439   quad mesh (!)
-22406 tria.cid                                             360,523
-```
-
-`22406 quad.cid` is worth an early look: **every element in the current corpus is
-a triangle or a beam**, so `ElementKind.QUAD` and the quad paths in
-`rule_element_geometry` have never met a real quadrilateral.
-
-**Scrubbing rule.** Substitute text of *identical length* so every column is
-preserved, then assert it:
-
-- no line changed length
-- the `!!` separator still ends at index 27 on every command line
-- the identifying string is gone
-
-Only the `A-1` title needed scrubbing on the existing fixture. Record each new
-file's fidelity in `tests/fixtures/README.md` — mark it byte-exact only if it is
-a true byte copy.
-
-### 3d. Promote the inferred specs using the 2025 manual
-
-Nine of the thirteen line specs were derived from files rather than read from the
-manual. Confirming them is cheap once you can read the PDF, and would let their
-`Source` change from `INFERRED` to `MANUAL`:
-
-| Spec | Manual section | What is unresolved |
-|---|---|---|
-| `A-1` | 5.3.1 | Four trailing 5-wide control fields at cols 76–95, currently named `control_a`…`control_d` because nobody knows what they are |
-| `A-2.L3`, `A-2.L12` | 5.3.2 | Only the first two fields are mapped |
-| `C-3.L3` | 5.5.6.3 | Columns beyond 30 unknown; `LGTYPE` never located |
-| `C-5.L3` | 5.5.6.5 | Whole layout inferred from two files; the `IIFLG` boundary codes (Table 5.5-7) are not modelled at all |
-| `D-1` | 5.6.1 | `MATNAM` occupies the first five of the name columns for canned soils; kept as one wide field rather than split, because splitting it wrongly mangles names |
-| `D-2.Isotropic` / `.Duncan` / `.Interface` | 5.6.2, 5.6.4.1, 5.6.7 | Partial |
-
-Still entirely uncatalogued, and all present in real files: the whole of Part B
-(`B-1.Plastic`, `B-2.Plastic`, `B-3.Plastic.A.Profile`, `B-3b.…`), the Level 2
-canned-mesh lines (`C-1…C-4.L2.Pipe` / `.Box` / `.Arch`), `D-3.Duncan`,
-`D-4.Duncan`, `CX-1`…`CX-4`, and `E-1`. They round-trip verbatim, so adding them
-is safe and incremental — one spec, one test, in any order.
-
-Page arithmetic for the 2025 manual: section `5-N` sits at roughly PDF page
-`N + 83`. For the 2013 manual it was `N + 87`.
-
-## 4. When you are done
-
-Update `tests/fixtures/README.md`, the spec `Source` values, and the status line
-in `CLAUDE.md`. If `fmt` found a genuine round-trip failure, that is the most
-important thing to report back — say which file and which line.
+Substitute text of **identical length** so every column is preserved, then
+assert it: no line changed length, the `!!` separator still ends at index 27 on
+every command line, the identifying string is gone, the byte count is unchanged,
+and the result still round-trips. Record each file's fidelity in
+`tests/fixtures/README.md`, and mark it byte-exact only if it is a true byte copy.

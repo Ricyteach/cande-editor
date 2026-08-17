@@ -1,0 +1,6 @@
+# CANDE .cid files are CRLF, and the round-trip guarantee this project rests on
+# is defined in *bytes* (invariant 1 in CLAUDE.md).  Git must never normalise
+# them: a clone with core.autocrlf=true -- the default on many Windows installs
+# -- would otherwise rewrite the line endings on checkout and fail every
+# fidelity test, for reasons that would look nothing like the cause.
+*.cid -text

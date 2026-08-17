@@ -1,0 +1,7 @@
+                      A-1!!ANALYS   1 0  1Tunnel Liner Plate - Example Location                        -100    0    0    0
+                  A-2.L12!!STEEL     
+                B-1.Steel!!  29000000       0.3     28000               0.284         0    0    2    0
+              B-2.Steel.A!!     0.174     0.064     0.059
+                   C-1.L1!!        54       120    1    0
+                   C-2.L1!!       8.5       150       0.3
+STOP

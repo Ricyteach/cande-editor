@@ -5,9 +5,10 @@ culverts; its input is a fixed-column `.cid` file. Read
 [`docs/CID-FORMAT.md`](docs/CID-FORMAT.md) before touching the codec and
 [`docs/REDESIGN-PROPOSAL.md`](docs/REDESIGN-PROPOSAL.md) for why any of this exists.
 
-**There is an open task waiting for an agent with OneDrive access:**
-[`docs/CORPUS-TASK.md`](docs/CORPUS-TASK.md). It is the highest-value thing
-outstanding. Please do it before starting anything new.
+The corpus sweep that task asked for has been done:
+[`docs/CORPUS-FINDINGS.md`](docs/CORPUS-FINDINGS.md) records what 2,886 real
+files said about the codec. Read it before changing the validation rules — two
+of them were found to be crying wolf, and it says why.
 
 ## The one thing to understand
 
@@ -76,6 +77,15 @@ legacy/          the previous Tkinter editor; unmaintained, still runnable
   Do not reintroduce MIT headers.
 - Python 3.11+. `ruff check . && ruff format --check . && mypy && pytest` must all
   pass; CI runs them on 3.11, 3.12 and 3.13.
+- **The viewer must be discoverable.** Features should surface at the moment
+  they become relevant and stay out of the way until then — the affordance for
+  editing a material appears when a material is selected, not in a menu the user
+  has to already know about. Two things follow. Nothing important may live only
+  in a keyboard shortcut, a right-click, or documentation. And a control that
+  cannot do anything useful right now should be absent or visibly inert with the
+  reason given, never present and silently failing. Prefer revealing depth on
+  demand over a flat wall of every option at once; the format has hundreds of
+  fields and showing them all is the failure mode to avoid.
 
 ## Some CANDE facts that are easy to get wrong
 
@@ -94,8 +104,14 @@ legacy/          the previous Tkinter editor; unmaintained, still runnable
 
 ## Status
 
-Phases 0–2 complete, Phase 3 (viewer) working. 118 tests. Mesh generation
+Phases 0–2 complete, Phase 3 (viewer) working. 200 tests. Mesh generation
 (Phase 4) and solver integration (Phase 5) are not started.
 
-The corpus is the weak point: only two fixtures, both thermoplastic. That is what
-`docs/CORPUS-TASK.md` is about.
+Nine fixtures, spanning Levels 1–3, steel/plastic/concrete/aluminum, both
+analysis and design mode, and — since the corpus sweep — quadrilateral elements
+and LRFD. Round-trip is verified byte-exact against 2,886 real files.
+
+Still uncovered: link elements, CONRIB and CONTUBE (which occur in no known
+file), and 41 command names that have no spec and so round-trip verbatim. There
+is also a known field-level write asymmetry that `fmt` cannot see — §4 of
+`docs/CORPUS-FINDINGS.md` — which needs a decision on `Record.set()`.
