@@ -33,14 +33,17 @@ and incremental — one spec, one test, in any order. By corpus weight:
 | Spec | Lines | Files | Manual section |
 |---|---:|---:|---|
 | `B-3b.Plastic.A.Profile` | 4,868 | 159 | 5.4.4.5 |
-| `B-1.Steel` | 2,468 | 2,076 | 5.4.5.1 |
-| `B-2.Steel.A` | 2,467 | 2,075 | 5.4.5.2 |
 | `B-3.Plastic.A.Profile` | 2,411 | 159 | 5.4.4.4 |
 | `B-4.Concrete.Case1_2` | 2,158 | 36 | 5.4.3.4 |
-| `B-3.Steel.AD.LRFD` | 1,956 | 1,795 | 5.4.5.8 |
 | `D-3.Duncan` / `D-4.Duncan` | 926 each | 292 | 5.6.4.2 / 5.6.4.3 |
+| `B-1.Plastic` / `B-2.Plastic` | 421 / 428 | ~258 | 5.4.4.1 / 5.4.4.2 |
+| `B-1…B-3.Concrete` | 223 each | 36 | 5.4.3.1–5.4.3.3 |
 | `CX-1`…`CX-4` | 18–689 | 8–18 | 5.5.5.1–5.5.5.4 |
 | `C-1…C-4.L2.Pipe` / `.Arch` | 8–11 each | 8–11 | 5.5.2 / 5.5.4 |
+
+Plastic is the obvious next material: it is the second most common pipe type
+(239 files) and `B-1.Plastic`/`B-2.Plastic` are the last common lines with no
+spec. Its profile-wall lines are the largest remaining block by line count.
 
 `C-3.L3`, `C-5.L3` and `D-2.*` remain `INFERRED` and partial. `C-5.L3`'s
 `IIFLG` boundary codes (Table 5.5-7) are still not modelled at all.

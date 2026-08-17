@@ -61,6 +61,107 @@ _SPECS: tuple[LineSpec, ...] = (
         partial=True,
         fields=(_f("pipe_type", 1, 10, _TEXT), _f("elements", 11, 15, _INT)),
     ),
+    # ------------------------------------------------------------------ Part B
+    #
+    # Part B describes the pipe material, and repeats once per pipe group.  The
+    # command name carries the pipe type, and for some lines the solution mode
+    # too: ``.A`` is the analysis form, ``.D`` the design form.
+    LineSpec(
+        name="B-1.Steel",
+        doc="Steel material properties and control. User Manual 5.4.5.1.",
+        source=Source.MANUAL,
+        fields=(
+            _f("modulus", 1, 10, _REAL, "PE: Young's modulus"),
+            _f("poisson", 11, 20, _REAL, "PNU: Poisson's ratio"),
+            _f("yield_stress", 21, 30, _REAL, "PYIELD: yield stress of the pipe wall"),
+            _f("seam_strength", 31, 40, _REAL, "PSEAM: yield stress of the seam"),
+            _f("density", 41, 50, _REAL, "PDEN"),
+            _f("modulus_bilinear", 51, 60, _REAL, "PE2: second modulus of the bilinear model"),
+            _f("joint_slip", 61, 65, _INT, "JOINT: 0 none, 1 slippage, 2 slippage with trace"),
+            _f("behaviour", 66, 70, _INT, "NONLIN: 1 linear, 2 bilinear stress-strain"),
+            _f(
+                "buckling",
+                71,
+                75,
+                _INT,
+                "IBUCK: 0 small deformation + AASHTO 1, 1 large + AASHTO 1, "
+                "2 large + CANDE, 3 small + AASHTO 2",
+            ),
+        ),
+    ),
+    LineSpec(
+        name="B-2.Steel.A",
+        doc=(
+            "Steel section properties, analysis mode. User Manual 5.4.5.2.  These "
+            "are the four numbers a corrugation-and-gage library would supply; "
+            "they are per unit length of pipe, not totals."
+        ),
+        source=Source.MANUAL,
+        fields=(
+            _f("area", 1, 10, _REAL, "PA: wall area per unit length"),
+            _f("inertia", 11, 20, _REAL, "PI: moment of inertia per unit length"),
+            _f("section_modulus", 21, 30, _REAL, "PS: section modulus per unit length"),
+            _f("deep_modulus", 31, 40, _REAL, "PZ: plastic modulus, deep corrugations only"),
+        ),
+    ),
+    LineSpec(
+        name="B-3.Steel.AD.LRFD",
+        doc="Steel resistance factors for LRFD. User Manual 5.4.5.8.",
+        source=Source.MANUAL,
+        fields=(
+            _f("phi_thrust", 1, 10, _REAL, "PHI(1): thrust stress yielding"),
+            _f("phi_buckling", 11, 20, _REAL, "PHI(2): global buckling"),
+            _f("phi_seam", 21, 30, _REAL, "PHI(3): seam strength in thrust"),
+            _f("phi_plastic", 31, 40, _REAL, "PHI(4): plastic penetration"),
+            _f("deflection_limit", 41, 50, _REAL, "DISP: allowable deflection at service load"),
+            _f("phi_deep", 51, 60, _REAL, "PHI(5): deep-corrugation criterion"),
+        ),
+    ),
+    LineSpec(
+        name="B-1.Alum",
+        doc=(
+            "Aluminum material properties and control. User Manual 5.4.1.1.  "
+            "Deliberately not a copy of B-1.Steel: aluminum has no joint-slip "
+            "option, so NONLIN and IBUCK sit five columns earlier."
+        ),
+        source=Source.MANUAL,
+        fields=(
+            _f("modulus", 1, 10, _REAL, "PE: Young's modulus"),
+            _f("poisson", 11, 20, _REAL, "PNU: Poisson's ratio"),
+            _f("yield_stress", 21, 30, _REAL, "PYIELD: yield stress of the pipe wall"),
+            _f("seam_strength", 31, 40, _REAL, "PSEAM: yield strength of the seam"),
+            _f("density", 41, 50, _REAL, "PDEN"),
+            _f("modulus_bilinear", 51, 60, _REAL, "PE2: second modulus of the bilinear model"),
+            _f("behaviour", 61, 65, _INT, "NONLIN: 1 linear, 2 bilinear stress-strain"),
+            _f("buckling", 66, 70, _INT, "IBUCK: buckling indicator"),
+        ),
+    ),
+    LineSpec(
+        name="B-2.Alum.A",
+        doc=(
+            "Aluminum analysis section properties. User Manual 5.4.1.2.  Per unit "
+            "length of pipe, not totals.  Aluminum has no deep-corrugation plastic "
+            "modulus, so there is no counterpart to B-2.Steel.A's PZ."
+        ),
+        source=Source.MANUAL,
+        fields=(
+            _f("area", 1, 10, _REAL, "PA: wall area per unit length"),
+            _f("inertia", 11, 20, _REAL, "PI: moment of inertia per unit length"),
+            _f("section_modulus", 21, 30, _REAL, "PS: section modulus per unit length"),
+        ),
+    ),
+    LineSpec(
+        name="B-3.Alum.AD.LRFD",
+        doc="Aluminum resistance factors for LRFD. User Manual 5.4.1.4.",
+        source=Source.MANUAL,
+        fields=(
+            _f("phi_thrust", 1, 10, _REAL, "PHI(1): wall area yielding in thrust"),
+            _f("phi_buckling", 11, 20, _REAL, "PHI(2): global buckling in thrust"),
+            _f("phi_seam", 21, 30, _REAL, "PHI(3): seam strength in thrust"),
+            _f("phi_plastic", 31, 40, _REAL, "PHI(4): plastic penetration"),
+            _f("deflection_limit", 41, 50, _REAL, "DISP: allowable deflection at service load"),
+        ),
+    ),
     # ------------------------------------------------------- Part C, Level 3
     LineSpec(
         name="C-1.L3",

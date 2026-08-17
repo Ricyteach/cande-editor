@@ -23,13 +23,17 @@ construction (invariant 2). So coverage was measured alongside it:
 
 | | lines | share |
 |---|---:|---:|
-| parsed as a spec'd `Record` | 7,012,577 | 75.3% |
+| parsed as a spec'd `Record` | 7,020,772 | 75.4% |
 | verbatim, not a command line | 2,275,610 | 24.4% |
-| verbatim, command line with no spec | 22,913 | 0.2% |
+| verbatim, command line with no spec | 14,718 | 0.2% |
 
 Three-quarters of the corpus goes through the field machinery rather than past
 it, so the clean sweep is real evidence and not an artefact of the fallback.
-Of the lines that *are* command lines, 99.7% now have a spec.
+Of the lines that *are* command lines, **99.79%** now have a spec.
+
+Line share understates the Part B work in §3: those lines are few per file — a
+handful per pipe group — but they appear in 2,076 of 2,886 files, and they are
+where the pipe's material and section properties live.
 
 ## 2. Two validation rules were crying wolf
 
@@ -88,6 +92,31 @@ is the stronger one — those 261,571 lines had previously been `Verbatim`
 passthrough and are now actually parsed.
 | `D-1` | `INFERRED` | `INFERRED`, documented | See below. |
 
+### The Part B pass: steel and aluminum
+
+A second pass catalogued the pipe-material lines, all at `Source.MANUAL`:
+
+| Spec | Manual | Lines | Files |
+|---|---|---:|---:|
+| `B-1.Steel` | 5.4.5.1 | 2,468 | 2,076 |
+| `B-2.Steel.A` | 5.4.5.2 | 2,467 | 2,075 |
+| `B-3.Steel.AD.LRFD` | 5.4.5.8 | 1,956 | 1,795 |
+| `B-1.Alum` | 5.4.1.1 | 442 | 145 |
+| `B-2.Alum.A` | 5.4.1.2 | 442 | 145 |
+| `B-3.Alum.AD.LRFD` | 5.4.1.4 | 420 | 131 |
+
+All six verified against the whole corpus: **zero** fields refusing to decode,
+**zero** lines with content past the last spec'd column, and round-trip still
+clean. Unlike `D-1`, the manual and reality agree exactly here.
+
+Two things worth knowing. `B-2.Steel.A` and `B-2.Alum.A` carry the section
+properties — area, moment of inertia and section modulus **per unit length** —
+that a corrugation-and-gage library would supply; steel adds `PZ`, a plastic
+modulus for deep corrugations, which aluminum has no counterpart to. And
+aluminum is *not* steel with a different name: it has no joint-slip option, so
+`NONLIN` and `IBUCK` sit five columns earlier. Assuming the layouts matched
+would have read `NONLIN` out of `PE2`'s columns.
+
 `D-1` deliberately still deviates from the manual, which is why it was **not**
 promoted. The manual gives `MATNAM` as columns 21–40 (`5A4`) and a GUI-only
 layer count at 41–42 (`I2`), and states that `MATNAM` "starts in column 21 and
@@ -143,9 +172,11 @@ in `CLAUDE.md` now states both halves of the property.
   `CONCRETE` (36), `BASIC` (18).
 - **Quadrilaterals are the norm**, not the exception: 2,269 files have them,
   though no fixture did until now.
-- 41 command names still have no spec, out of 55 that occur. The largest are
-  `B-3b.Plastic.A.Profile` (4,868 lines), `B-1.Steel` / `B-2.Steel.A` (~2,470
-  each, in ~2,076 files), and `D-3.Duncan` / `D-4.Duncan` (926 each).
+- 35 command names still have no spec, out of 55 that occur. The largest are
+  `B-3b.Plastic.A.Profile` (4,868 lines) and `B-3.Plastic.A.Profile` (2,411),
+  `B-4.Concrete.Case1_2` (2,158), and `D-3.Duncan` / `D-4.Duncan` (926 each).
+  Plastic is the obvious next material: second most common pipe type at 239
+  files, and its Part B lines are the largest remaining block.
 - Two files carry genuinely malformed fields, and candejar reports them by field
   rather than crashing (invariant 4): `14637 - Mesh2D Trial 6.cid`, whose `C-4`
   lines shift one column right from element 58 on, and two

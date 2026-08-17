@@ -60,6 +60,12 @@ def fixture_name(cid_path: Path) -> str:
 
 
 @pytest.fixture
+def fixtures_dir() -> Path:
+    """The fixture directory, for tests that need one file by name."""
+    return FIXTURES
+
+
+@pytest.fixture
 def level3_lines() -> list[str]:
     return read_lines(FIXTURES / "level3_plastic_asd.cid")
 

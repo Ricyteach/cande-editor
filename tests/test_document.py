@@ -33,8 +33,24 @@ class TestFidelity:
         """Line types with no spec must still come back byte-for-byte."""
         document = read_cid(cid_path)
         unparsed = [line for line in document if isinstance(line, Verbatim) and "!!" in line.text]
-        assert unparsed, "fixture no longer exercises uncatalogued line types"
+        if not unparsed:
+            pytest.skip(f"{cid_path.name} is now fully catalogued")
         assert dumps(document).encode("latin-1") == cid_path.read_bytes()
+
+    def test_some_fixture_still_exercises_uncatalogued_lines(self, fixtures_dir: Path) -> None:
+        """The Verbatim path must stay covered as the catalogue grows.
+
+        Fidelity for line types with no spec (invariant 2) is what makes it safe
+        to ship a codec that covers part of a large format. Individual fixtures
+        become fully catalogued over time -- that is progress -- but if *every*
+        fixture did, this guarantee would silently stop being tested.
+        """
+        exercising = [
+            path.name
+            for path in sorted(fixtures_dir.glob("*.cid"))
+            if any(isinstance(line, Verbatim) and "!!" in line.text for line in read_cid(path))
+        ]
+        assert exercising, "no fixture exercises the Verbatim path any more"
 
     def test_lf_files_keep_lf(self) -> None:
         text = "                      D-1!!    1    1       120Soil\nSTOP\n"
@@ -163,6 +179,55 @@ class TestDecoding:
         assert record.int_at("last_step") == 10
         assert record.float_at("factor") == 1.95
         assert record.str_at("comment") == "Vertical earth load, max"
+
+    def test_steel_material_properties(self, fixtures_dir: Path) -> None:
+        """B-1.Steel. User Manual 5.4.5.1."""
+        record = read_cid(fixtures_dir / "level2_pipe_steel_wsd.cid").first("B-1.Steel")
+        assert record is not None
+        assert record.float_at("modulus") == 29_000_000.0
+        assert record.float_at("poisson") == 0.3
+        assert record.float_at("yield_stress") == 80_000.0
+        assert record.float_at("seam_strength") == 80_000.0
+        assert record.float_at("density") == 0.284
+        assert record.int_at("behaviour") == 2  # bilinear
+        assert record.int_at("joint_slip") == 0
+
+    def test_steel_section_properties(self, fixtures_dir: Path) -> None:
+        """B-2.Steel.A -- the numbers a corrugation library would supply.
+
+        Per unit length of pipe, not totals. User Manual 5.4.5.2.
+        """
+        record = read_cid(fixtures_dir / "level2_pipe_steel_wsd.cid").first("B-2.Steel.A")
+        assert record is not None
+        assert record.float_at("area") == 0.04
+        assert record.float_at("inertia") == 0.00333
+        assert record.float_at("section_modulus") == 0.00668
+        assert record.float_at("deep_modulus") is None  # not a deep corrugation
+
+    def test_steel_lrfd_resistance_factors(self, fixtures_dir: Path) -> None:
+        """B-3.Steel.AD.LRFD. User Manual 5.4.5.8."""
+        record = read_cid(fixtures_dir / "level2_pipe_steel_lrfd.cid").first("B-3.Steel.AD.LRFD")
+        assert record is not None
+        assert record.float_at("phi_thrust") == 1.0
+        assert record.float_at("phi_buckling") == 1.0
+        assert record.float_at("phi_seam") == 1.0
+        assert record.float_at("phi_plastic") == 1.0
+        assert record.float_at("deflection_limit") == 5.0
+
+    def test_aluminum_is_not_laid_out_like_steel(self, fixtures_dir: Path) -> None:
+        """B-1.Alum has no joint-slip field, so NONLIN and IBUCK shift left.
+
+        Assuming aluminum mirrored steel would read NONLIN out of PE2's columns.
+        User Manual 5.4.1.1.
+        """
+        record = read_cid(fixtures_dir / "level3_aluminum_wsd.cid").first("B-1.Alum")
+        assert record is not None
+        assert record.float_at("modulus") == 10_000_000.0
+        assert record.float_at("poisson") == 0.33
+        assert record.float_at("yield_stress") == 24_000.0
+        assert record.int_at("behaviour") == 2  # NONLIN at 61-65, not 66-70
+        assert record.int_at("buckling") == 0
+        assert "joint_slip" not in {f.name for f in record.spec.fields}
 
     def test_control_line(self, level3_document_path: Path) -> None:
         record = read_cid(level3_document_path).first("C-2.L3")

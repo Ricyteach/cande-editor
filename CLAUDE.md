@@ -116,5 +116,12 @@ Nine fixtures, spanning Levels 1–3, steel/plastic/concrete/aluminum, both
 analysis and design mode, and — since the corpus sweep — quadrilateral elements
 and LRFD. Round-trip is verified byte-exact against 2,886 real files.
 
+The steel and aluminum Part B lines are catalogued, so pipe **section
+properties** (area, moment of inertia, section modulus per unit length) are now
+addressable — `B-2.Steel.A` and `B-2.Alum.A`. Nothing in `model/` or `validate/`
+reads Part B yet; surfacing pipe-group properties on `Problem` is what a section
+library or a UI would build on.
+
 Still uncovered: link elements, CONRIB and CONTUBE (which occur in no known
-file), and 41 command names that have no spec and so round-trip verbatim.
+file), plastic's Part B lines, and 35 command names that have no spec and so
+round-trip verbatim.
