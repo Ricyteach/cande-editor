@@ -12,6 +12,10 @@ thermoplastic design criteria.
 
 `candejar` exists to close that gap.
 
+> **Working on this?** Read [`CLAUDE.md`](CLAUDE.md) first — it lists the invariants
+> that must not be broken. There is an open task at
+> [`docs/CORPUS-TASK.md`](docs/CORPUS-TASK.md) for anyone with OneDrive access.
+
 > **Status: early, but usable.** The codec, model, validation engine, CLI and mesh viewer
 > work on real files. Mesh generation and solver integration are not built yet. See
 > [`docs/REDESIGN-PROPOSAL.md`](docs/REDESIGN-PROPOSAL.md) for the plan and
