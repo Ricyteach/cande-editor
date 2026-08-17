@@ -9,7 +9,7 @@ parallel representation that could drift out of step with it.
 from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from functools import cached_property
 
@@ -23,9 +23,17 @@ __all__ = [
     "MaterialModel",
     "Node",
     "PipeGroup",
+    "PipeMaterial",
+    "PipeSection",
     "Problem",
     "SoilElement",
 ]
+
+#: Part B lines carrying pipe-wall material properties, by pipe type.
+_PIPE_MATERIAL_LINES = frozenset({"B-1.Steel", "B-1.Alum"})
+
+#: Part B lines carrying pipe-wall section properties, analysis form.
+_PIPE_SECTION_LINES = frozenset({"B-2.Steel.A", "B-2.Alum.A"})
 
 
 class ElementKind(Enum):
@@ -164,11 +172,42 @@ class Boundary:
 
 
 @dataclass(frozen=True, slots=True)
+class PipeMaterial:
+    """The pipe wall's material properties, from the group's ``B-1`` line."""
+
+    modulus: float | None
+    poisson: float | None
+    yield_stress: float | None
+    seam_strength: float | None
+    density: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class PipeSection:
+    """The pipe wall's section properties, from the group's ``B-2`` line.
+
+    All **per unit length** of pipe, not totals -- these are the numbers a
+    corrugation-and-gage table supplies.  ``plastic_modulus`` is steel's ``PZ``
+    for deep corrugations; aluminum has no counterpart and leaves it ``None``.
+    """
+
+    area: float | None
+    inertia: float | None
+    section_modulus: float | None
+    plastic_modulus: float | None
+
+
+@dataclass(frozen=True, slots=True)
 class PipeGroup:
     number: int
     pipe_type: str | None
-    elements: int | None
     index: int
+    #: NPMATX, the connected beam element count.  Level 3 only.
+    elements: int | None = None
+    #: NPCAN, the canned-mesh code.  Level 2 only, and *not* an element count.
+    canned_mesh: int | None = None
+    material: PipeMaterial | None = None
+    section: PipeSection | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -324,17 +363,58 @@ class Problem:
 
     @cached_property
     def pipe_groups(self) -> list[PipeGroup]:
-        return [
-            PipeGroup(
-                number=position,
-                pipe_type=record.str_at("pipe_type"),
-                elements=record.int_at("elements"),
-                index=index,
-            )
-            for position, (index, record) in enumerate(
-                self.document.records("A-2.L3", "A-2.L12"), start=1
-            )
-        ]
+        """One entry per pipe group, in file order.
+
+        Part A/B repeats once per group, so an ``A-2`` line owns every Part B
+        line that follows it until the next ``A-2``.  That ordering is the only
+        thing tying a material to its group -- nothing carries a group number.
+
+        Only catalogued Part B line types contribute.  A group whose pipe type
+        has no spec yet (plastic, concrete, CONRIB, CONTUBE) simply has no
+        material or section, rather than a wrong one.
+        """
+        groups: list[PipeGroup] = []
+        for index, record in self.document.records():
+            if record.name in ("A-2.L3", "A-2.L12"):
+                level_3 = record.name == "A-2.L3"
+                groups.append(
+                    PipeGroup(
+                        number=len(groups) + 1,
+                        pipe_type=record.str_at("pipe_type"),
+                        index=index,
+                        elements=record.int_at("elements") if level_3 else None,
+                        canned_mesh=None if level_3 else record.int_at("canned_mesh"),
+                    )
+                )
+            elif not groups:
+                continue
+            elif record.name in _PIPE_MATERIAL_LINES:
+                groups[-1] = replace(
+                    groups[-1],
+                    material=PipeMaterial(
+                        modulus=record.float_at("modulus"),
+                        poisson=record.float_at("poisson"),
+                        yield_stress=record.float_at("yield_stress"),
+                        seam_strength=record.float_at("seam_strength"),
+                        density=record.float_at("density"),
+                    ),
+                )
+            elif record.name in _PIPE_SECTION_LINES:
+                groups[-1] = replace(
+                    groups[-1],
+                    section=PipeSection(
+                        area=record.float_at("area"),
+                        inertia=record.float_at("inertia"),
+                        section_modulus=record.float_at("section_modulus"),
+                        # Steel only; the aluminum spec has no such column.
+                        plastic_modulus=(
+                            record.float_at("deep_modulus")
+                            if record.name == "B-2.Steel.A"
+                            else None
+                        ),
+                    ),
+                )
+        return groups
 
     # ------------------------------------------------------------- geometry
     @cached_property

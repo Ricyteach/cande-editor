@@ -46,20 +46,32 @@ _SPECS: tuple[LineSpec, ...] = (
     ),
     LineSpec(
         name="A-2.L3",
-        doc="Pipe selection, Level 3. One per pipe group.",
-        source=Source.INFERRED,
-        partial=True,
+        doc="Pipe selection, Level 3. One per pipe group. User Manual 5.3.2.",
+        source=Source.MANUAL,
         fields=(
-            _f("pipe_type", 1, 10, _TEXT, "ALUMINUM/BASIC/CONCRETE/CONRIB/CONTUBE/PLASTIC/STEEL"),
-            _f("elements", 11, 15, _INT, "number of beam elements in this group"),
+            _f(
+                "pipe_type",
+                1,
+                10,
+                _TEXT,
+                "PTYPE: ALUMINUM, BASIC, CONCRETE, CONRIB, CONTUBE, PLASTIC or STEEL",
+            ),
+            _f("elements", 11, 15, _INT, "NPMATX: connected beam elements in this group, max 999"),
         ),
     ),
     LineSpec(
         name="A-2.L12",
-        doc="Pipe selection, Levels 1 and 2.",
-        source=Source.INFERRED,
-        partial=True,
-        fields=(_f("pipe_type", 1, 10, _TEXT), _f("elements", 11, 15, _INT)),
+        doc=(
+            "Pipe selection, Levels 1 and 2. User Manual 5.3.2.  Columns 11-15 are "
+            "NPCAN, the canned-mesh code -- *not* an element count.  Only A-2.L3 "
+            "carries a beam count there, and reading this field as one reports a "
+            "circular pipe mesh as a group of one element."
+        ),
+        source=Source.MANUAL,
+        fields=(
+            _f("pipe_type", 1, 10, _TEXT, "PTYPE"),
+            _f("canned_mesh", 11, 15, _INT, "NPCAN: canned mesh code, Level 2 only"),
+        ),
     ),
     # ------------------------------------------------------------------ Part B
     #

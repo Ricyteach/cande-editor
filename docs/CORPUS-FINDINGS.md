@@ -117,6 +117,19 @@ aluminum is *not* steel with a different name: it has no joint-slip option, so
 `NONLIN` and `IBUCK` sit five columns earlier. Assuming the layouts matched
 would have read `NONLIN` out of `PE2`'s columns.
 
+### A-2 was reporting a canned-mesh code as an element count
+
+Both `A-2` specs named columns 11–15 `elements`. The manual (5.3.2) gives two
+different fields there: `NPMATX`, the connected beam count, on `A-2.L3` — but
+`NPCAN`, the **canned-mesh code**, on `A-2.L12`, and only for Level 2.
+
+So every Level 1 or 2 file reported a fictitious element count:
+`PipeGroup(pipe_type='STEEL', elements=1)` for a canned circular pipe mesh that
+has no `C-4` lines at all, because CANDE generates them. A viewer would have
+shown "1 element" for a mesh of hundreds. Both specs are now `MANUAL`, and
+`A-2.L12`'s field is `canned_mesh`. Across the corpus, 3,549 groups carry
+`NPMATX` and 19 carry `NPCAN`, and **no group carries both**.
+
 `D-1` deliberately still deviates from the manual, which is why it was **not**
 promoted. The manual gives `MATNAM` as columns 21–40 (`5A4`) and a GUI-only
 layer count at 41–42 (`I2`), and states that `MATNAM` "starts in column 21 and
@@ -177,6 +190,13 @@ in `CLAUDE.md` now states both halves of the property.
   `B-4.Concrete.Case1_2` (2,158), and `D-3.Duncan` / `D-4.Duncan` (926 each).
   Plastic is the obvious next material: second most common pipe type at 239
   files, and its Part B lines are the largest remaining block.
+- **67 Level 3 files declare more pipe groups than they define** — `A-1` gives
+  `NPGRPS = 3` while the file carries one `A-2` and one Part B set. The reading
+  is not in doubt: `NPGRPS` is columns 13–15, it decodes correctly on the
+  nine-group fixture, and every `A-1` in the corpus decodes without error. No
+  rule was written for this, because it is not known whether CANDE accepted
+  these files, and a rule guessed at is how invariant 5 gets broken. Worth an
+  answer from someone who can run them.
 - Two files carry genuinely malformed fields, and candejar reports them by field
   rather than crashing (invariant 4): `14637 - Mesh2D Trial 6.cid`, whose `C-4`
   lines shift one column right from element 58 on, and two
