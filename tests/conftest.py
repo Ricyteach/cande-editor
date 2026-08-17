@@ -25,10 +25,28 @@ def read_lines(path: Path) -> list[str]:
     return text.split("\r\n")
 
 
+#: Fixtures that are input *skeletons* rather than models CANDE ran: a single
+#: element on a node that is never defined, and no restraint anywhere.  They are
+#: here for line-type coverage -- they carry the Concrete and Aluminum Part B
+#: lines, which nothing else in the corpus of fixtures does -- and for
+#: round-trip.  Invariant 5 is a promise about files CANDE *accepted*; these
+#: were never run, so asserting they validate cleanly would prove nothing and
+#: would quietly redefine the invariant.
+INCOMPLETE_MODELS = {"level3_concrete_wsd.cid", "level3_aluminum_wsd.cid"}
+
+
 @pytest.fixture(params=cid_fixtures(), ids=lambda p: p.stem)
 def cid_path(request: pytest.FixtureRequest) -> Path:
     """Each ``.cid`` fixture in turn."""
     return cast(Path, request.param)
+
+
+@pytest.fixture
+def accepted_cid_path(cid_path: Path) -> Path:
+    """Each fixture that is a complete model CANDE accepted."""
+    if cid_path.name in INCOMPLETE_MODELS:
+        pytest.skip(f"{cid_path.name} is an input skeleton, not a model CANDE ran")
+    return cid_path
 
 
 @pytest.fixture

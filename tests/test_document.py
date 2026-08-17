@@ -51,7 +51,12 @@ class TestEditing:
 
     def test_editing_leaves_the_rest_of_the_file_alone(self, cid_path: Path) -> None:
         document = read_cid(cid_path)
-        index, record = next(document.records("D-1"))
+        materials = document.records("D-1")
+        first = next(materials, None)
+        if first is None:
+            # Level 1 files carry their soil on C-2.L1 and have no D-1 at all.
+            pytest.skip(f"{cid_path.name} defines no D-1 material")
+        index, record = first
         edited = document.replaced(index, record.set("density", 137.5))
 
         original_lines = dumps(document).split(document.newline)
@@ -87,6 +92,16 @@ class TestDecoding:
         assert record.int_at("pipe_groups") == 9
         assert record.str_at("title") is not None
         assert "-999" not in str(record.str_at("title")), "title is eating a control field"
+
+    def test_lrfd_load_factor_line(self) -> None:
+        """E-1 carries the LRFD net load factor. User Manual 5.7.1."""
+        document = loads(f"{'E-1':>25}!!    1   10      1.95Vertical earth load, max\r\n")
+        record = document.first("E-1")
+        assert record is not None
+        assert record.int_at("first_step") == 1
+        assert record.int_at("last_step") == 10
+        assert record.float_at("factor") == 1.95
+        assert record.str_at("comment") == "Vertical earth load, max"
 
     def test_control_line(self, level3_document_path: Path) -> None:
         record = read_cid(level3_document_path).first("C-2.L3")

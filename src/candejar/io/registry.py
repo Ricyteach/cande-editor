@@ -30,21 +30,18 @@ _SPECS: tuple[LineSpec, ...] = (
     # ------------------------------------------------------------------ Part A
     LineSpec(
         name="A-1",
-        doc="Master control.",
-        source=Source.INFERRED,
-        partial=True,
+        doc="Master control. User Manual 5.3.1.",
+        source=Source.MANUAL,
         fields=(
-            _f("mode", 1, 6, _TEXT, "ANALYS, DESIGN or CHECK"),
-            _f("level", 7, 10, _INT, "solution level: 1, 2 or 3"),
-            _f("method", 11, 12, _INT, "evaluation method"),
-            _f("pipe_groups", 13, 15, _INT, "number of pipe groups; Part A/B repeats"),
-            _f("title", 16, 75, _TEXT, "free-text problem title"),
-            # Four trailing control fields, confirmed present and 5 wide in both
-            # Level 2 and Level 3 files, but not yet matched to manual names.
-            _f("control_a", 76, 80, _INT, "purpose not yet pinned"),
-            _f("control_b", 81, 85, _INT, "purpose not yet pinned"),
-            _f("control_c", 86, 90, _INT, "purpose not yet pinned"),
-            _f("control_d", 91, 95, _INT, "purpose not yet pinned"),
+            _f("mode", 1, 8, _TEXT, "XMODE: ANALYS, DESIGN, CHECK or STOP"),
+            _f("level", 9, 10, _INT, "LEVEL: solution level 1, 2 or 3"),
+            _f("method", 11, 12, _INT, "LRFD: 0 working stress, 1 LRFD"),
+            _f("pipe_groups", 13, 15, _INT, "NPGRPS: number of pipe groups; Part A/B repeats"),
+            _f("title", 16, 75, _TEXT, "HED: heading for output files"),
+            _f("iterations", 76, 80, _INT, "ITMAX: iterations per load step"),
+            _f("culvert_id", 81, 85, _INT, "CULVERTID"),
+            _f("process_id", 86, 90, _INT, "PROCESSID"),
+            _f("subdomain_id", 91, 95, _INT, "SUBDID"),
         ),
     ),
     LineSpec(
@@ -158,24 +155,37 @@ _SPECS: tuple[LineSpec, ...] = (
     # ------------------------------------------------------------------ Part D
     LineSpec(
         name="D-1",
-        doc="Material control. User Manual 5.6.1.",
+        doc=(
+            "Material control. User Manual 5.6.1.  Every field but 'name' matches "
+            "the manual's table; 'name' deliberately does not -- see below -- so the "
+            "spec as a whole stays INFERRED."
+        ),
         source=Source.INFERRED,
+        partial=True,
         fields=(
             _f("limit", 1, 1, _TEXT, "blank, or L on the last material"),
-            _f("material", 2, 5, _INT, "ID within its own namespace: soil or interface"),
+            _f("material", 2, 5, _INT, "I: ID within its own namespace, soil or interface"),
             _f(
                 "model",
                 6,
                 10,
                 _INT,
-                "1 Isotropic, 2 Orthotropic, 3 Duncan, 4 Overburden, "
+                "ITYP: 1 Isotropic, 2 Orthotropic, 3 Duncan, 4 Overburden, "
                 "5 Hardin, 6 Interface, 7 Composite Link, 8 Mohr/Coulomb",
             ),
-            _f("density", 11, 20, _REAL),
-            # MATNAM occupies the first five of these columns for the canned-soil
-            # models; the rest is free text.  Kept as one field until the manual
-            # page is read, because splitting it wrongly would mangle names.
-            _f("name", 21, 60, _TEXT, "MATNAM (first five columns) plus free text"),
+            _f("density", 11, 20, _REAL, "DEN: pcf; ignored for interface and link"),
+            # MATNAM is positional: the manual states it "starts in column 21 and
+            # is 4 or 5 capital letters and/or numbers", and for ITYP 3, 4 and 5 it
+            # selects a canned soil, so column 21 must be preserved exactly.
+            #
+            # The manual gives MATNAM as columns 21-40 (5A4) and a GUI-only layer
+            # count at 41-42 (I2).  Real files do not respect that boundary: they
+            # run descriptive text straight through it -- the corpus fixture writes
+            # "SW100  Embankement Fill", whose "il" lands in columns 41-42 -- and
+            # 63,112 D-1 lines across the 2,886-file corpus do likewise.  Modelling
+            # 41-42 as an integer would report those files as broken, so the span is
+            # kept wide and the layer count is left unaddressed rather than invented.
+            _f("name", 21, 60, _TEXT, "MATNAM in the first five columns, then free text"),
         ),
     ),
     LineSpec(
@@ -205,6 +215,18 @@ _SPECS: tuple[LineSpec, ...] = (
             _f("model_number", 1, 5, _INT),
             _f("ratio", 6, 15, _REAL),
             _f("bulk", 16, 20, _INT, "IBULK: 0 Duncan, 1 Duncan/Selig"),
+        ),
+    ),
+    # ------------------------------------------------------------------ Part E
+    LineSpec(
+        name="E-1",
+        doc="LRFD net load factor per load step. User Manual 5.7.1.",
+        source=Source.MANUAL,
+        fields=(
+            _f("first_step", 1, 5, _INT, "INCRS: first load step this factor applies to"),
+            _f("last_step", 6, 10, _INT, "INCRL: last load step; defaults to INCRS"),
+            _f("factor", 11, 20, _REAL, "FACTOR: net LRFD load factor, default 1.00"),
+            _f("comment", 21, 60, _TEXT, "COMMENT: printed with the factor for each step"),
         ),
     ),
 )

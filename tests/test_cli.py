@@ -24,8 +24,8 @@ def edited(source: Path, target: Path, **changes: object) -> Path:
 
 
 class TestCheck:
-    def test_clean_file_exits_zero(self, cid_path: Path) -> None:
-        assert main(["check", str(cid_path)]) == 0
+    def test_clean_file_exits_zero(self, accepted_cid_path: Path) -> None:
+        assert main(["check", str(accepted_cid_path)]) == 0
 
     def test_broken_file_exits_one(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]

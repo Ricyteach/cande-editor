@@ -69,9 +69,9 @@ class TestCleanModel:
         )
         assert [f for f in run_rules(problem) if f.severity is Severity.ERROR] == []
 
-    def test_real_files_produce_no_errors(self, cid_path: Path) -> None:
+    def test_real_files_produce_no_errors(self, accepted_cid_path: Path) -> None:
         """A file CANDE accepted must not be reported as broken."""
-        findings = run_rules(Problem.read(str(cid_path)))
+        findings = run_rules(Problem.read(str(accepted_cid_path)))
         errors = [f for f in findings if f.severity is Severity.ERROR]
         assert errors == [], "\n".join(str(f) for f in errors)
 
@@ -230,7 +230,7 @@ class TestGeometry:
         )
         assert "aspect ratio of 400:1" in messages_for(problem, "element-aspect")[0]
 
-    def test_interface_k_node_must_exceed_i_and_j(self) -> None:
+    def test_interface_k_node_must_exceed_i_or_j(self) -> None:
         problem = build(
             nodes=[*SQUARE_NODES, (5, 0.0, 0.0), (6, 0.0, 0.0)],
             elements=[SQUARE, (2, 6, 5, 1, 0, 1, 1, 1)],
@@ -238,9 +238,41 @@ class TestGeometry:
             boundaries=RESTRAINTS,
             control="   2    3    0    3    1    6    2  200    1    0    1    0",
         )
-        assert "does not exceed its I and J nodes" in " ".join(
+        assert "exceeds neither of its I and J nodes" in " ".join(
             messages_for(problem, "interface-connectivity")
         )
+
+    def test_gaps_in_element_numbering_are_not_a_count_mismatch(self) -> None:
+        """CANDE generates the elements a gap in NE skips over.
+
+        NELEM = 3 with C-4 lines for elements 1 and 3 is correct input, not a
+        miscount.  Comparing NELEM against the number of lines reported 86 such
+        files in a 2,886-file corpus, all of which CANDE had accepted.
+        """
+        problem = build(
+            nodes=[*SQUARE_NODES, (5, 20.0, 0.0), (6, 20.0, 10.0)],
+            elements=[SQUARE, (3, 2, 5, 6, 0, 1, 1, 0)],
+            materials=SOIL,
+            boundaries=RESTRAINTS,
+            control="   2    3    0    3    1    6    3  200    1    0    1    0",
+        )
+        assert "element-count" not in rules_fired(problem)
+
+    def test_interface_k_node_between_i_and_j_is_accepted(self) -> None:
+        """The manual asks for K > I *or* J, and only *prefers* K > both.
+
+        Enforcing the preference reported 64,421 elements across 1,671 files of
+        a 2,886-file corpus that CANDE had accepted, and caught nothing that
+        broke the real rule.  K = 6 here exceeds J = 5 but not I = 7.
+        """
+        problem = build(
+            nodes=[*SQUARE_NODES, (5, 0.0, 0.0), (6, 0.0, 0.0), (7, 0.0, 0.0)],
+            elements=[SQUARE, (2, 7, 5, 6, 0, 1, 1, 1)],
+            materials=[(1, 1, "Fill"), (1, 6, "Interface")],
+            boundaries=RESTRAINTS,
+            control="   2    3    0    3    1    7    2  200    1    0    1    0",
+        )
+        assert "interface-connectivity" not in rules_fired(problem)
 
     def test_link_element_is_not_mistaken_for_a_beam(self) -> None:
         """IX(7) = 9 is a pinned link; node count alone would call it a beam."""

@@ -202,17 +202,25 @@ def rule_node_numbering(problem: Problem) -> Iterator[Finding]:
 
 
 def rule_element_count(problem: Problem) -> Iterator[Finding]:
-    """``NELEM`` must match the element count exactly (User Manual 5.5.6.2)."""
+    """``NELEM`` must match the element count exactly (User Manual 5.5.6.2).
+
+    Compared against the *highest* element number rather than the number of
+    ``C-4`` lines, because CANDE fills gaps in the numbering by generating the
+    missing elements: a file may legitimately list fewer lines than NELEM.  Of
+    135 corpus files this rule flagged, 86 were gapped files CANDE had accepted.
+    """
     record = problem.document.first("C-2.L3")
     if record is None:
         return
     declared = record.int_at("element_count")
-    actual = len(problem.elements)
-    if declared is not None and declared != actual:
+    if declared is None:
+        return
+    actual = max(problem.elements) if problem.elements else 0
+    if declared != actual:
         yield _error(
             "element-count",
-            f"C-2 declares NELEM = {declared} but the file defines {actual} elements; "
-            f"CANDE requires these to match exactly.",
+            f"C-2 declares NELEM = {declared} but the file's highest element number "
+            f"is {actual}; CANDE requires these to match exactly.",
             entity="C-2.L3",
             index=next(i for i, _ in problem.document.records("C-2.L3")),
         )
@@ -455,7 +463,15 @@ def rule_element_geometry(problem: Problem) -> Iterator[Finding]:
 
 
 def rule_interface_connectivity(problem: Problem) -> Iterator[Finding]:
-    """The interface and link K node must exceed I and J, and belong to nothing else."""
+    """The interface and link K node must exceed I or J, and belong to nothing else.
+
+    The manual (5.5.6.6) says IX(3) "must be larger than either IX(1) or IX(2),
+    preferably larger than both".  Only the first half is a requirement.  An
+    earlier version of this rule enforced the preference -- ``k <= max(i, j)``
+    -- which fired on 64,421 elements across 1,671 files of a 2,886-file corpus
+    that CANDE had accepted, and on none that broke the actual rule.  Invariant
+    5: a rule that cries wolf is worse than a missing rule.
+    """
     shared: Counter[int] = Counter()
     for element in problem.elements.values():
         for node in element.nodes:
@@ -475,10 +491,10 @@ def rule_interface_connectivity(problem: Problem) -> Iterator[Finding]:
             )
             continue
         i, j, k = element.nodes[0], element.nodes[1], element.nodes[2]
-        if k <= max(i, j):
+        if k <= min(i, j):
             yield _error(
                 "interface-connectivity",
-                f"Element {element.number} has K node {k}, which does not exceed its "
+                f"Element {element.number} has K node {k}, which exceeds neither of its "
                 f"I and J nodes ({i}, {j}) as CANDE requires.",
                 entity=f"element {element.number}",
                 index=element.index,
