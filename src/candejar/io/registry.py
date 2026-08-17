@@ -257,12 +257,18 @@ _SPECS: tuple[LineSpec, ...] = (
         ),
     ),
     # `B-3.Plastic.A.Smooth` is deliberately absent.  The manual (5.4.4.3) puts PT
-    # at columns 11-20, but real files put it at 1-10: 52 corpus lines for a SMOOTH
-    # wall carry a single value there, and the manual itself says PT alone
-    # "completes smooth wall input", so that value can only be the thickness.
-    # Meanwhile the `level3_plastic_asd` fixture carries five values and matches
-    # the manual exactly.  Both readings cannot be right, and guessing wrong would
-    # silently misreport a wall thickness.  See docs/CORPUS-FINDINGS.md.
+    # at columns 11-20; every real file puts it at 1-10, and physics agrees with
+    # the files.  PA is an area per unit length, so it cannot exceed PT, the wall
+    # height -- a section cannot hold more material than a solid one.  Read the
+    # manual's way, all 154 corpus records with both values violate that; read the
+    # files' way, 2 do, and PC comes out exactly PT/2 in 153 of them.  The manual's
+    # *prose* matches the files too: it says PA "need not be input for smooth
+    # walls", which is precisely the 52 records carrying PT alone at 1-10.
+    #
+    # Against all that, the `level3_plastic_asd` fixture carries five values and
+    # fits the manual's columns exactly, with PI = t^3/12 and PC = t/2 to the
+    # digit.  One real file cannot be waved away, so this stays uncatalogued and
+    # verbatim until CANDE itself settles it.  See docs/CORPUS-FINDINGS.md.
     # ------------------------------------------------------- Part C, Level 3
     LineSpec(
         name="C-1.L3",

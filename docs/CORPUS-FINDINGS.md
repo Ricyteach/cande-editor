@@ -135,13 +135,21 @@ gained a `ProfileBand` per node range.
 **`B-3.Plastic.A.Smooth` was deliberately not catalogued.** The manual (5.4.4.3)
 puts `PT` — the wall thickness — at columns 11–20. Real files put it at 1–10:
 
-- 52 corpus lines for a `SMOOTH` wall carry a **single** value, at columns 1–10,
-  and the manual itself says `PT` alone "completes smooth wall input". That value
-  can only be the thickness.
-- In all seven distinct `GENERAL` records, the 4th value is *exactly* half the
-  1st — centroid = height/2 — which only holds under the shifted reading.
-- Against that, the `level3_plastic_asd` fixture carries five values and fits the
-  manual exactly, with `PI` = t³/12 and `PC` = t/2 to the digit.
+- **Physics settles it.** `PA` is an area per unit length and `PT` the wall
+  height, so `PA ≤ PT` always — a section cannot contain more material than a
+  solid one of the same height. Of the 154 corpus records carrying both, the
+  manual's columns make **154 of 154 physically impossible**; the files' columns
+  make 2. Likewise `PI` must not exceed `PT³/12`.
+- Under the files' columns, `PC` comes out **exactly** `PT/2` — centroid at
+  mid-height — in 153 of those 154 records.
+- 52 lines for a `SMOOTH` wall carry a **single** value, at columns 1–10. The
+  manual's own prose agrees: `PT` alone "completes smooth wall input", and `PA`
+  "need not be input for smooth walls". Only its column table disagrees.
+- The page was checked in full; nothing was dropped in text extraction. The
+  table really does begin at `PT (11-20)`.
+- Against all that, the `level3_plastic_asd` fixture carries five values and fits
+  the manual exactly, with `PI` = t³/12 and `PC` = t/2 to the digit. One real
+  file cannot be waved away.
 
 Both readings cannot be right. Getting it wrong would silently misreport a wall
 thickness in a buried-structure model, so the line stays verbatim until someone
