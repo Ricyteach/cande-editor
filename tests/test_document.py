@@ -6,7 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from candejar.io import Record, Verbatim, dumps, loads, read_cid, write_cid
+from candejar.io import (
+    FieldDecodeError,
+    Record,
+    Verbatim,
+    dumps,
+    loads,
+    read_cid,
+    write_cid,
+)
 
 
 class TestFidelity:
@@ -81,6 +89,59 @@ class TestEditing:
         _, record = next(document.records("C-4.L3"))
         with pytest.raises(KeyError, match="material"):
             record.get("materail")
+
+
+class TestNoOpWrites:
+    """Writing the value a field already holds must not touch the bytes.
+
+    The encoders render canonically; a file records how its author wrote it.
+    Re-encoding an unchanged value used to rewrite the field, which across a
+    2,886-file corpus affected 44 field kinds and 2.8 million fields.
+    """
+
+    def test_rewriting_a_real_keeps_the_authors_decimals(self) -> None:
+        document = loads(f"{'C-3.L3':>25}!!    1  000   -300.00    -60.00\r\n")
+        _, record = next(document.records("C-3.L3"))
+        assert record.set("x", -300.0).render() == record.render()
+
+    def test_rewriting_a_whole_keeps_leading_zeros(self) -> None:
+        document = loads(f"{'C-3.L3':>25}!!    1  000   -300.00    -60.00\r\n")
+        _, record = next(document.records("C-3.L3"))
+        assert record.raw("generate") == "00"
+        assert record.set("generate", 0).raw("generate") == "00"
+
+    def test_rewriting_text_does_not_shift_it_left(self) -> None:
+        """MATNAM is positional -- the manual says it starts in column 21."""
+        document = loads(f"{'D-1':>25}!!    1    6         0 Inter # 1\r\n")
+        _, record = next(document.records("D-1"))
+        assert record.set("name", "Inter # 1").render() == record.render()
+
+    def test_a_no_op_write_is_free_for_every_field_of_every_fixture(self, cid_path: Path) -> None:
+        document = read_cid(cid_path)
+        for line in document.lines:
+            if not isinstance(line, Record):
+                continue
+            for spec_field in line.spec.fields:
+                try:
+                    value = line.get(spec_field.name)
+                except FieldDecodeError:
+                    continue  # malformed text is meant to be overwritten
+                assert line.set(spec_field.name, value).render() == line.render(), (
+                    f"{cid_path.name}: rewriting {line.name}.{spec_field.name} "
+                    f"with its own value changed the line"
+                )
+
+    def test_a_real_change_still_writes(self) -> None:
+        document = loads(f"{'C-3.L3':>25}!!    1  000   -300.00    -60.00\r\n")
+        _, record = next(document.records("C-3.L3"))
+        assert record.set("x", -301.0).float_at("x") == -301.0
+
+    def test_an_unreadable_field_is_overwritten_not_preserved(self) -> None:
+        """A write is exactly what junk in a column is for."""
+        document = loads(f"{'C-4.L3':>25}!!    1  6x7   42\r\n")
+        _, record = next(document.records("C-4.L3"))
+        assert record.raw("i") == "  6x7"
+        assert record.set("i", 687).int_at("i") == 687
 
 
 class TestDecoding:

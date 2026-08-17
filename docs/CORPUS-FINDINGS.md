@@ -99,7 +99,7 @@ manufacturing exactly the kind of false positive just removed — so the `name`
 field stays one wide span and the layer count is left unaddressed rather than
 invented. Invariant 6: the provenance label stays honest about that.
 
-## 4. Open: a field-level asymmetry that `fmt` cannot see
+## 4. A field-level asymmetry that `fmt` cannot see — found, and fixed
 
 `fmt` proves the *envelope* round-trips. It does not prove that writing a field
 back is lossless, because `Record.set()` only rewrites the one field it is given.
@@ -115,17 +115,24 @@ original bytes in 44 field kinds:
 (Counted before the `A-1` and `E-1` spec changes in §3, which shift the totals
 slightly without changing the three causes.)
 
-None of this corrupts a file today: nothing writes a field it has not been asked
-to change, and every rewrite stays inside that field's own columns (invariant 3).
-It matters for two reasons. The `Text` case is a genuine hazard where the column
-is load-bearing — `MATNAM` at column 21 selects a canned soil. And a no-op write
-that changes bytes makes diffs noisy and would surprise anyone who assumed
+No file was being corrupted: nothing writes a field it has not been asked to
+change, and every rewrite stays inside that field's own columns (invariant 3).
+But it mattered for two reasons. The `Text` case is a genuine hazard where the
+column is load-bearing — the manual says `MATNAM` "starts in column 21", and a
+one-column shift changes which canned soil CANDE selects. And a no-op write that
+changes bytes makes diffs noisy and would surprise anyone who assumed
 `set(f, get(f))` was free.
 
-The narrow fix is to make `Record.set()` leave the raw text alone when the new
-value decodes equal to the current one. That is a real design change to the
-write path, so it is left for the owner to decide rather than folded into a
-corpus sweep.
+**Fixed.** `Record.set()` now returns the record untouched when the field
+already decodes to the value being written. A field whose text will not decode
+at all is still overwritten — that is exactly what a write is for. Verified
+across the corpus: rewriting every field of every record with the value just
+read from it changes **0** lines, down from 2.8 million.
+
+The encoders themselves are deliberately unchanged and still render
+canonically — that is what they are for when a value really does change. The
+fix is that `set()` no longer invokes them when nothing has changed. Invariant 3
+in `CLAUDE.md` now states both halves of the property.
 
 ## 5. Corpus facts worth knowing
 

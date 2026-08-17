@@ -35,10 +35,15 @@ make a change pass, the change is wrong.
    becomes a `Verbatim` and is reproduced exactly. Fidelity must never depend on
    coverage; this is what makes it safe to ship a codec that covers part of a
    large format.
-3. **Writing a field touches only that field's columns.** `Record.set()` splices
-   one column range. A write must not perturb a neighbouring field, including
-   fields this version has never seen. Editing one material in the 1,288-element
-   fixture changes exactly two bytes.
+3. **Writing a field touches only that field's columns, and writing an unchanged
+   value touches nothing.** `Record.set()` splices one column range. A write must
+   not perturb a neighbouring field, including fields this version has never
+   seen. Editing one material in the 1,288-element fixture changes exactly two
+   bytes. Encoding is *not* the inverse of decoding — the encoders render
+   canonically, a file records how its author wrote it — so `set()` skips the
+   write entirely when the field already holds that value. Otherwise re-encoding
+   would rewrite `   -300.00` as `      -300` and shift `MATNAM` off column 21,
+   where the manual says it must start.
 4. **Nothing crashes on a malformed file.** Decoding raises `FieldDecodeError`,
    the tolerant accessors catch it, and `rule_field_decoding` reports it by line
    and field name. Empty, prose, binary, truncated and mangled files all produce
@@ -112,6 +117,4 @@ analysis and design mode, and — since the corpus sweep — quadrilateral eleme
 and LRFD. Round-trip is verified byte-exact against 2,886 real files.
 
 Still uncovered: link elements, CONRIB and CONTUBE (which occur in no known
-file), and 41 command names that have no spec and so round-trip verbatim. There
-is also a known field-level write asymmetry that `fmt` cannot see — §4 of
-`docs/CORPUS-FINDINGS.md` — which needs a decision on `Record.set()`.
+file), and 41 command names that have no spec and so round-trip verbatim.

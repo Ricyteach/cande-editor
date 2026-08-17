@@ -22,7 +22,7 @@ from candejar.io.line import (
     split_line,
 )
 from candejar.io.registry import LINE_TYPES, spec_for
-from candejar.io.spec import Field, LineSpec, Real, Source, Text, Whole
+from candejar.io.spec import Field, FieldDecodeError, LineSpec, Real, Source, Text, Whole
 
 __all__ = [
     "LINE_TYPES",
@@ -33,6 +33,7 @@ __all__ = [
     "CommandLine",
     "Document",
     "Field",
+    "FieldDecodeError",
     "Line",
     "LineSpec",
     "Real",

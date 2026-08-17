@@ -9,24 +9,14 @@ round-trip bug in the corpus — and 75% of its 9.3 million lines go through the
 field machinery rather than past it, so that is real evidence rather than an
 artefact of the verbatim fallback. Two validation rules were found to be crying
 wolf and were narrowed; `A-1` and a new `E-1` were promoted to `Source.MANUAL`;
-seven fixtures were added.
+seven fixtures were added; and a field-level write asymmetry the sweep turned up
+— which `fmt` cannot see — was fixed in `Record.set()`.
 
 ---
 
 ## Still open
 
-### 1. Decide what `Record.set()` should do about no-op writes
-
-The one unresolved correctness question. Re-encoding a field with the value just
-read from it does not reproduce the original bytes in 44 field kinds — `Real`
-drops the file's decimal places, `Whole` normalises `00` to ` 0`, and `Text`
-left-justifies past a leading space. Nothing corrupts a file today, but the
-`Text` case is a hazard wherever a column is load-bearing, and `MATNAM` at
-column 21 is exactly that. §4 of `CORPUS-FINDINGS.md` has the numbers and a
-proposed narrow fix. This is a change to the write path, so it wants an owner's
-decision, not a drive-by.
-
-### 2. Fixtures that could not be obtained
+### 1. Fixtures that could not be obtained
 
 - **CONRIB and CONTUBE** — absent from all 2,886 files. Must come from elsewhere.
 - **Link elements** (`IX(7)` = 8–11) including the death step — 69 files have
@@ -35,7 +25,7 @@ decision, not a drive-by.
   whose `C-4.L3` lines are correct through element 57 and shift one column right
   from element 58 onward. ~100 KB; needs trimming.
 
-### 3. Line types still uncatalogued
+### 2. Line types still uncatalogued
 
 41 command names have no spec. They round-trip verbatim, so adding them is safe
 and incremental — one spec, one test, in any order. By corpus weight:

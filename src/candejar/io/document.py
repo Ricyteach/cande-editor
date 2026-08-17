@@ -111,8 +111,26 @@ class Record:
         The rest of the record is untouched, down to the byte, so a write cannot
         perturb a neighbouring field -- including fields this version does not
         know about.
+
+        Writing the value a field already holds does nothing at all.  Encoding
+        is not the inverse of decoding: the encoders render a value canonically,
+        while a file records how its author wrote it, so re-encoding an
+        unchanged value rewrites ``   -300.00`` as ``      -300``, ``00`` as
+        `` 0``, and shifts left-justified text past a leading space.  Across a
+        2,886-file corpus that affected 44 field kinds and 2.8 million fields.
+
+        Mostly that only makes diffs noisy, but not always: the manual says
+        MATNAM "starts in column 21", so on ``D-1`` a shift of one column
+        changes which canned soil CANDE selects.  Skipping the write keeps the
+        author's formatting, and keeps an edit's diff to the fields that
+        actually changed.
         """
         spec_field = self.spec[name]
+        try:
+            if spec_field.kind.decode(self.raw(name)) == value:
+                return self
+        except FieldDecodeError:
+            pass  # unreadable text is exactly what a write is for; overwrite it
         text = spec_field.kind.encode(value, spec_field.width)
         return replace(self, line=self.line.with_field(spec_field.start, spec_field.end, text))
 
