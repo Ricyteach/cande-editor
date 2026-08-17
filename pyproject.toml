@@ -1,5 +1,9 @@
 [build-system]
-requires = ["setuptools>=68"]
+# 77, not 68: `license` as an SPDX string and `license-files` are PEP 639, which
+# setuptools only understands from 77.  Build isolation hides this by fetching
+# the newest setuptools anyway, so it only bites on --no-build-isolation, where
+# it surfaces as an AssertionError from setuptools reading this file.
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -48,7 +52,13 @@ addopts = "--strict-markers --strict-config"
 [tool.ruff]
 src = ["src", "tests"]
 line-length = 100
-extend-exclude = ["legacy", "docs/notes"]
+# Markdown is excluded because ruff formats Python code blocks inside it, and
+# the code in docs/ is illustrative rather than runnable: REDESIGN-PROPOSAL.md
+# aligns its column tables by hand to show what a fixed-column record looks
+# like, which the formatter collapses.  That alignment is the content, not
+# styling, in a document about fixed-column layouts.  This is what made
+# `ruff format --check .` fail in CI.
+extend-exclude = ["legacy", "docs/notes", "*.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
