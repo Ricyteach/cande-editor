@@ -89,15 +89,48 @@ class TestPipeGroups:
     def test_an_uncatalogued_pipe_type_has_no_material_rather_than_a_wrong_one(
         self, fixtures_dir: Path
     ) -> None:
-        """Plastic's Part B lines have no spec yet, so they contribute nothing.
+        """Concrete's Part B lines have no spec, so they contribute nothing.
 
-        The failure to avoid is guessing: reading plastic's B-1 with steel's
-        column table would decode cleanly and be wrong.
+        The failure to avoid is guessing: reading concrete's B-1 with steel's
+        column table would decode cleanly and be wrong. Plastic used to serve
+        as this example, until it was catalogued.
         """
+        groups = Problem.read(str(fixtures_dir / "level3_concrete_wsd.cid")).pipe_groups
+        assert [g.pipe_type for g in groups] == ["CONCRETE"]
+        assert groups[0].material is None
+        assert groups[0].section is None
+
+    def test_plastic_carries_short_and_long_term_properties(self, fixtures_dir: Path) -> None:
+        """Plastic creeps, so stiffness and strength depend on load duration."""
+        group = Problem.read(str(fixtures_dir / "level3_plastic_asd.cid")).pipe_groups[0]
+        assert group.pipe_type == "PLASTIC"
+        assert group.wall_type == "SMOOTH"
+        assert group.material is not None
+        assert group.material.modulus == 165_000.0
+        assert group.material.modulus_long_term == 75_000.0
+        assert group.material.strength_long_term == 50_000.0
+        assert group.material.density == 0.0345944
+        assert group.material.seam_strength is None  # plastic has no seam
+
+    def test_a_profile_wall_carries_a_band_per_node_range(self, fixtures_dir: Path) -> None:
+        """A profile wall varies around the periphery, so one section won't do."""
         groups = Problem.read(str(fixtures_dir / "level3_plastic_asd.cid")).pipe_groups
-        assert len(groups) == 9
-        assert all(g.pipe_type == "PLASTIC" for g in groups)
-        assert all(g.material is None and g.section is None for g in groups)
+        profile = [g for g in groups if g.wall_type == "PROFILE"]
+        smooth = [g for g in groups if g.wall_type == "SMOOTH"]
+        assert (len(profile), len(smooth)) == (3, 6)
+
+        band = profile[0].profile[0]
+        assert (band.period, band.height) == (10.841, 4.968)
+        assert (band.web_angle, band.web_thickness) == (74.849, 0.225)
+        assert [b.node_first for b in profile[0].profile] == list(range(1, 22))
+        assert all(not g.profile for g in smooth), "a smooth wall has no bands"
+
+    def test_steel_has_no_long_term_properties(self, fixtures_dir: Path) -> None:
+        """Only plastic carries the paired values; the rest leave them None."""
+        group = Problem.read(str(fixtures_dir / "level2_pipe_steel_wsd.cid")).pipe_groups[0]
+        assert group.material is not None
+        assert group.material.modulus_long_term is None
+        assert group.material.strength_long_term is None
 
     def test_part_b_before_any_group_is_ignored(self) -> None:
         """A malformed file must not attach Part B to a group that isn't there."""

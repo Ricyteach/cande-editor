@@ -8,7 +8,10 @@ from candejar.model.problem import (
     MaterialModel,
     Node,
     PipeGroup,
+    PipeMaterial,
+    PipeSection,
     Problem,
+    ProfileBand,
     SoilElement,
 )
 
@@ -20,6 +23,9 @@ __all__ = [
     "MaterialModel",
     "Node",
     "PipeGroup",
+    "PipeMaterial",
+    "PipeSection",
     "Problem",
+    "ProfileBand",
     "SoilElement",
 ]

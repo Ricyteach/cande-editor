@@ -26,6 +26,7 @@ __all__ = [
     "PipeMaterial",
     "PipeSection",
     "Problem",
+    "ProfileBand",
     "SoilElement",
 ]
 
@@ -173,13 +174,20 @@ class Boundary:
 
 @dataclass(frozen=True, slots=True)
 class PipeMaterial:
-    """The pipe wall's material properties, from the group's ``B-1`` line."""
+    """The pipe wall's material properties, from the group's ``B-1``/``B-2`` line.
+
+    ``modulus`` and ``strength`` are the short-term values.  Plastic creeps, so
+    it is the one pipe type that also carries long-term values; for steel and
+    aluminum those are ``None`` and the short-term pair is simply *the* pair.
+    """
 
     modulus: float | None
     poisson: float | None
     yield_stress: float | None
     seam_strength: float | None
     density: float | None
+    modulus_long_term: float | None = None
+    strength_long_term: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,6 +206,24 @@ class PipeSection:
 
 
 @dataclass(frozen=True, slots=True)
+class ProfileBand:
+    """One node range of a profile wall, from a ``B-3`` profile line.
+
+    A profile wall is not uniform around the periphery, so its geometry is
+    given per node range rather than as one section.  ``node_first`` and
+    ``node_last`` say which nodes this band describes.
+    """
+
+    period: float | None
+    height: float | None
+    web_angle: float | None
+    web_thickness: float | None
+    node_first: int | None
+    node_last: int | None
+    index: int
+
+
+@dataclass(frozen=True, slots=True)
 class PipeGroup:
     number: int
     pipe_type: str | None
@@ -208,6 +234,11 @@ class PipeGroup:
     canned_mesh: int | None = None
     material: PipeMaterial | None = None
     section: PipeSection | None = None
+    #: WTYPE -- SMOOTH, GENERAL or PROFILE.  Plastic states this explicitly;
+    #: for other pipe types it is not recorded and stays ``None``.
+    wall_type: str | None = None
+    #: Non-empty only for a profile wall, one entry per node range.
+    profile: tuple[ProfileBand, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -397,6 +428,39 @@ class Problem:
                         yield_stress=record.float_at("yield_stress"),
                         seam_strength=record.float_at("seam_strength"),
                         density=record.float_at("density"),
+                    ),
+                )
+            elif record.name == "B-1.Plastic":
+                # Plastic splits across two lines: B-1 names the wall type and
+                # the polymer, B-2 carries the numbers.
+                groups[-1] = replace(groups[-1], wall_type=record.str_at("wall_type"))
+            elif record.name == "B-2.Plastic":
+                groups[-1] = replace(
+                    groups[-1],
+                    material=PipeMaterial(
+                        modulus=record.float_at("modulus_short"),
+                        poisson=record.float_at("poisson"),
+                        yield_stress=record.float_at("strength_short"),
+                        seam_strength=None,  # plastic has no seam
+                        density=record.float_at("density"),
+                        modulus_long_term=record.float_at("modulus_long"),
+                        strength_long_term=record.float_at("strength_long"),
+                    ),
+                )
+            elif record.name == "B-3.Plastic.A.Profile":
+                groups[-1] = replace(
+                    groups[-1],
+                    profile=(
+                        *groups[-1].profile,
+                        ProfileBand(
+                            period=record.float_at("period"),
+                            height=record.float_at("height"),
+                            web_angle=record.float_at("web_angle"),
+                            web_thickness=record.float_at("web_thickness"),
+                            node_first=record.int_at("node_first"),
+                            node_last=record.int_at("node_last"),
+                            index=index,
+                        ),
                     ),
                 )
             elif record.name in _PIPE_SECTION_LINES:

@@ -174,6 +174,95 @@ _SPECS: tuple[LineSpec, ...] = (
             _f("deflection_limit", 41, 50, _REAL, "DISP: allowable deflection at service load"),
         ),
     ),
+    LineSpec(
+        name="B-1.Plastic",
+        doc="Plastic load controls and wall type. User Manual 5.4.4.1.",
+        source=Source.MANUAL,
+        fields=(
+            _f("wall_type", 1, 10, _TEXT, "WTYPE: SMOOTH, GENERAL or PROFILE"),
+            _f("plastic_type", 11, 20, _TEXT, "PTYPE: HDPE, PVC, PP or OTHER"),
+            _f("load_duration", 21, 25, _INT, "LOADT: short- or long-term load duration"),
+            _f("buckling", 26, 30, _INT, "IBUCK: analysis mode"),
+            _f("short_term_switch", 31, 35, _INT, "IASWITCH: use short-term properties"),
+        ),
+    ),
+    LineSpec(
+        name="B-2.Plastic",
+        doc=(
+            "Plastic material properties. User Manual 5.4.4.2.  Plastic is the only "
+            "pipe type with paired short- and long-term properties: it creeps, so "
+            "stiffness and strength both depend on load duration."
+        ),
+        source=Source.MANUAL,
+        fields=(
+            _f("modulus_short", 1, 10, _REAL, "PESHRT: Young's modulus, short-term"),
+            _f("strength_short", 11, 20, _REAL, "PUSHRT: ultimate stress, short-term"),
+            _f("modulus_long", 21, 30, _REAL, "PELONG: Young's modulus, long-term"),
+            _f("strength_long", 31, 40, _REAL, "PULONG: ultimate stress, long-term"),
+            _f("poisson", 41, 50, _REAL, "PNU: Poisson's ratio"),
+            _f("density", 51, 60, _REAL, "PDEN"),
+            _f("tension_strain_limit", 61, 70, _REAL, "PTSTRN: max allowable tension strain"),
+        ),
+    ),
+    LineSpec(
+        name="B-3.Plastic.A.Profile",
+        doc=(
+            "Profile-wall geometry, one line per node range. User Manual 5.4.4.4.  "
+            "A profile wall varies around the periphery, so this repeats and NSEQ1 "
+            "to NSEQ2 say which nodes each line describes."
+        ),
+        source=Source.MANUAL,
+        fields=(
+            _f("period", 1, 10, _REAL, "PERIOD: length of one profile period"),
+            _f("height", 11, 20, _REAL, "HEIGHT: total height of the profile section"),
+            _f("web_angle", 21, 30, _REAL, "WEBANG: web angle from horizontal"),
+            _f("web_thickness", 31, 40, _REAL, "WEBT"),
+            _f("web_k", 41, 50, _REAL, "WEBK: web edge-support coefficient"),
+            _f("horizontal_elements", 51, 55, _INT, "NHEL: horizontal elements in the profile"),
+            _f("local_buckling", 56, 60, _INT, "LOCALB: include local buckling"),
+            _f("node_first", 61, 65, _INT, "NSEQ1: first node sharing these properties"),
+            _f("node_last", 66, 70, _INT, "NSEQ2: last node sharing these properties"),
+        ),
+    ),
+    LineSpec(
+        name="B-3b.Plastic.A.Profile",
+        doc=(
+            "Profile-wall elements, one line per horizontal element. User Manual "
+            "5.4.4.5.  Follows a B-3 profile line and repeats NHEL times."
+        ),
+        source=Source.MANUAL,
+        fields=(
+            _f("element", 1, 5, _INT, "IDENT: element identifier"),
+            _f("length", 6, 15, _REAL, "XLONG"),
+            _f("thickness", 16, 25, _REAL, "THICK"),
+            _f("edge_k", 26, 35, _REAL, "EDGEK: edge support coefficient"),
+        ),
+    ),
+    LineSpec(
+        name="B-4.Plastic",
+        doc=(
+            "Plastic resistance factors for LRFD. User Manual 5.4.4.8.  Partial: "
+            "the manual's table ends at column 50, but nine corpus lines carry a "
+            "value at column 51 that it does not describe.  Those columns are "
+            "preserved verbatim rather than given an invented name."
+        ),
+        source=Source.MANUAL,
+        partial=True,
+        fields=(
+            _f("phi_thrust", 1, 10, _REAL, "PHI(1): thrust strain yielding"),
+            _f("phi_buckling", 11, 20, _REAL, "PHI(2): global buckling"),
+            _f("phi_combined", 21, 30, _REAL, "PHI(3): combined strain"),
+            _f("deflection_limit", 31, 40, _REAL, "ADISP: allowable percent deflection"),
+            _f("tensile_strain_limit", 41, 50, _REAL, "TSTRN: allowable tensile strain"),
+        ),
+    ),
+    # `B-3.Plastic.A.Smooth` is deliberately absent.  The manual (5.4.4.3) puts PT
+    # at columns 11-20, but real files put it at 1-10: 52 corpus lines for a SMOOTH
+    # wall carry a single value there, and the manual itself says PT alone
+    # "completes smooth wall input", so that value can only be the thickness.
+    # Meanwhile the `level3_plastic_asd` fixture carries five values and matches
+    # the manual exactly.  Both readings cannot be right, and guessing wrong would
+    # silently misreport a wall thickness.  See docs/CORPUS-FINDINGS.md.
     # ------------------------------------------------------- Part C, Level 3
     LineSpec(
         name="C-1.L3",

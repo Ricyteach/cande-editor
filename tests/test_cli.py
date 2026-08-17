@@ -56,7 +56,10 @@ class TestShow:
         assert "Level:" in out
         assert "1,288" in out  # element count, thousands-separated
         assert "Continuous Load Scaling" in out
-        assert "B-3b.Plastic.A.Profile" in out  # uncatalogued lines are disclosed
+        # Uncatalogued lines are disclosed rather than hidden.  This names the
+        # one type left in this fixture; B-3b.Plastic.A.Profile used to serve
+        # here, until it was catalogued.
+        assert "B-3.Plastic.A.Smooth" in out
 
     def test_outline(self, level3_document_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         main(["show", "--outline", str(level3_document_path)])
