@@ -1,25 +1,31 @@
 Copyright (c) 2025-2026 Rick Teachey. All rights reserved.
 
-This software and its associated documentation are proprietary and
-confidential. No licence, express or implied, is granted to any person to
-use, copy, modify, merge, publish, distribute, sublicense, or sell copies
-of this software, in whole or in part, except under a separate written
-agreement signed by the copyright holder.
+candejar and its documentation are proprietary and confidential works of
+authorship. Where this repository is readable, it is readable for inspection
+only. No right or licence of any kind -- express, implied, or arising by
+estoppel or course of conduct -- is granted by the copyright holder, and none
+may be inferred from the presence of this material in a publicly reachable
+location.
 
-Unauthorised copying, distribution, or use of this software, by any means,
-is prohibited.
+Exploiting this work in any manner requires the prior written permission of the
+copyright holder under a separate signed agreement. That includes, without
+being limited to, reproducing it, adapting or translating it, incorporating any
+part of it into another work, redistributing it in source or compiled form,
+displaying it publicly, and operating it as a hosted or embedded service.
+Absent such an agreement, none of those things is permitted, in whole or in
+part.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+No warranty of any kind is offered, and every warranty that would otherwise be
+implied by law is disclaimed to the fullest extent the law allows. This
+software models the structural behaviour of buried structures. Its output is
+not engineering advice and is no substitute for the independent judgement of a
+qualified engineer, who remains responsible for any design decision. The
+copyright holder accepts no liability for any loss, damage, or claim arising
+from use of this software or reliance on anything it produces.
 
 ---
 
 Note on earlier versions. Commits up to and including 052c005 were published
 under the MIT Licence. That grant cannot be withdrawn from anyone who already
-received the software under it; this change applies from the following commit
+received the software under it; these terms apply from the following commit
 onward. The MIT text as it stood is preserved in git history.
